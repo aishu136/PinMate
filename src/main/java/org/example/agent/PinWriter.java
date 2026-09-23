@@ -1,7 +1,6 @@
 package org.example.agent;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.JsonOutputFormat;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig;
@@ -9,11 +8,10 @@ import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinIdeas;
 import org.example.agent.model.PinRequest;
-import org.example.agent.model.PinResponse;
+import org.example.agent.model.SourcePage;
 import org.jboss.logging.Logger;
 
 import java.util.LinkedHashSet;
@@ -21,8 +19,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/** Writes pin copy with Claude structured output and enforces Pinterest field limits. */
 @ApplicationScoped
-public class PinContentService {
+public class PinWriter {
 
     // Pinterest field limits
     static final int MAX_TITLE = 100;
@@ -30,7 +29,7 @@ public class PinContentService {
     static final int MAX_ALT_TEXT = 500;
     static final int MAX_HASHTAGS = 8;
 
-    private static final Logger LOG = Logger.getLogger(PinContentService.class);
+    private static final Logger LOG = Logger.getLogger(PinWriter.class);
 
     private static final String SYSTEM_PROMPT = """
             You are an expert Pinterest content strategist and SEO copywriter.
@@ -40,7 +39,7 @@ public class PinContentService {
             - Keep titles under 100 characters and descriptions under 500 characters.
             - End each description with a clear, specific call to action.
             - Make each variation meaningfully different in angle (e.g. how-to, list, inspiration, problem/solution).
-            - Never invent facts, prices, statistics or claims about the destination link.
+            - When a page brief is provided, ground the copy in it; never invent facts, prices, statistics or claims.
             """;
 
     /** JSON schema derived from {@link PinIdeas}; computed once via the SDK's typed builder. */
@@ -49,41 +48,36 @@ public class PinContentService {
             .outputConfig(PinIdeas.class)
             .build().rawParams().outputConfig().flatMap(OutputConfig::format).orElseThrow();
 
-    private final AnthropicClient client;
-    private final String model;
-    private final long maxTokens;
-    private final String effort;
-    private final boolean refusalFallbacks;
-
-    public PinContentService(AnthropicClient client,
-                             @ConfigProperty(name = "pinterest-agent.model") String model,
-                             @ConfigProperty(name = "pinterest-agent.max-tokens") long maxTokens,
-                             @ConfigProperty(name = "pinterest-agent.effort") String effort,
-                             @ConfigProperty(name = "pinterest-agent.refusal-fallbacks") boolean refusalFallbacks) {
-        this.client = client;
-        this.model = model;
-        this.maxTokens = maxTokens;
-        this.effort = effort;
-        this.refusalFallbacks = refusalFallbacks;
+    /** Pins plus the model that actually answered (it differs when a refusal fallback ran). */
+    public record Draft(List<PinIdea> pins, String model) {
     }
 
-    public PinResponse generate(PinRequest request) {
+    private final AnthropicClient client;
+    private final AgentConfig config;
+
+    public PinWriter(AnthropicClient client, AgentConfig config) {
+        this.client = client;
+        this.config = config;
+    }
+
+    /**
+     * @param source   page brief from {@link PageReader}, or null
+     * @param feedback problems with the previous attempt that this attempt must fix, or null
+     */
+    public Draft write(PinRequest request, SourcePage source, String feedback) {
         StructuredMessageCreateParams.Builder<PinIdeas> builder = MessageCreateParams.builder()
-                .model(model)
-                .maxTokens(maxTokens)
+                .model(config.model())
+                .maxTokens(config.maxTokens())
                 .system(SYSTEM_PROMPT)
                 .outputConfig(PinIdeas.class)
                 // Re-set the full config: outputConfig(Class) alone replaces the whole object and drops effort.
-                .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.of(effort)).format(PIN_IDEAS_FORMAT).build())
-                .addUserMessage(buildUserPrompt(request));
+                .outputConfig(OutputConfig.builder()
+                        .effort(OutputConfig.Effort.of(config.effort()))
+                        .format(PIN_IDEAS_FORMAT)
+                        .build())
+                .addUserMessage(buildUserPrompt(request, source, feedback));
 
-        if (refusalFallbacks) {
-            // Server-side fallback: if the model declines, the API retries on a recommended fallback model.
-            builder.putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
-                    .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"));
-        }
-
-        StructuredMessage<PinIdeas> message = client.messages().create(builder.build());
+        StructuredMessage<PinIdeas> message = client.messages().create(ClaudeRequests.withFallbacks(builder, config).build());
         LOG.debugf("Claude usage for topic '%s': %s", request.topic(), message.usage());
 
         StopReason stopReason = message.stopReason().orElse(null);
@@ -99,17 +93,17 @@ public class PinContentService {
                 .flatMap(block -> block.text().stream())
                 .flatMap(text -> text.text().pins().stream())
                 .filter(Objects::nonNull)
-                .map(PinContentService::enforceLimits)
+                .map(PinWriter::enforceLimits)
                 .limit(request.variationsOrDefault())
                 .toList();
 
         if (pins.isEmpty()) {
             throw new PinGenerationException(502, "Claude returned no pin ideas");
         }
-        return new PinResponse(request.topic(), message.model().asString(), pins);
+        return new Draft(pins, message.model().asString());
     }
 
-    static String buildUserPrompt(PinRequest request) {
+    static String buildUserPrompt(PinRequest request, SourcePage source, String feedback) {
         StringBuilder sb = new StringBuilder()
                 .append("Create exactly ").append(request.variationsOrDefault())
                 .append(" Pinterest pin variations.\n\n<topic>").append(request.topic().strip()).append("</topic>\n");
@@ -120,8 +114,16 @@ public class PinContentService {
             sb.append("<tone>").append(request.tone().strip()).append("</tone>\n");
         }
         if (hasText(request.url())) {
-            sb.append("<destination_url>").append(request.url().strip()).append("</destination_url>\n")
-                    .append("The URL is context only; you cannot open it, so don't describe its contents.\n");
+            sb.append("<destination_url>").append(request.url().strip()).append("</destination_url>\n");
+            if (source != null && source.fetched()) {
+                sb.append("<page_brief>\n").append(source.summary()).append("\n</page_brief>\n");
+            } else {
+                sb.append("The page could not be read, so don't describe its contents.\n");
+            }
+        }
+        if (hasText(feedback)) {
+            sb.append("\nYour previous attempt had problems. Fix them this time:\n<feedback>")
+                    .append(feedback).append("</feedback>\n");
         }
         return sb.toString();
     }
@@ -134,7 +136,7 @@ public class PinContentService {
                 normalizeHashtags(pin.hashtags()),
                 truncate(pin.altText(), MAX_ALT_TEXT),
                 pin.suggestedBoards() == null ? List.of()
-                        : pin.suggestedBoards().stream().filter(PinContentService::hasText).map(String::strip).distinct().toList(),
+                        : pin.suggestedBoards().stream().filter(PinWriter::hasText).map(String::strip).distinct().toList(),
                 pin.imageIdea() == null ? null : pin.imageIdea().strip());
     }
 
@@ -171,7 +173,7 @@ public class PinContentService {
         return cut.stripTrailing() + "…";
     }
 
-    private static boolean hasText(String s) {
+    static boolean hasText(String s) {
         return s != null && !s.isBlank();
     }
 }

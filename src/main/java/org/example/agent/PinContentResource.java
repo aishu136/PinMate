@@ -15,15 +15,15 @@ import org.example.agent.model.PinResponse;
 @Produces(MediaType.APPLICATION_JSON)
 public class PinContentResource {
 
-    private final PinContentService service;
+    private final PinAgent agent;
 
-    public PinContentResource(PinContentService service) {
-        this.service = service;
+    public PinContentResource(PinAgent agent) {
+        this.agent = agent;
     }
 
     @POST
     @Path("/generate")
     public PinResponse generate(@NotNull @Valid PinRequest request) {
-        return service.generate(request);
+        return agent.generate(request);
     }
 }

@@ -2,6 +2,7 @@ package org.example.agent.model;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+import java.io.Serializable;
 import java.util.List;
 
 /** A single ready-to-post pin. Also used as the structured-output schema sent to Claude. */
@@ -17,5 +18,5 @@ public record PinIdea(
         @JsonPropertyDescription("2 to 4 board names this pin would fit on")
         List<String> suggestedBoards,
         @JsonPropertyDescription("Short description of the image or visual concept to create for this pin")
-        String imageIdea) {
+        String imageIdea) implements Serializable {
 }

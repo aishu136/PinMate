@@ -21,14 +21,14 @@ import static org.mockito.Mockito.when;
 class PinContentResourceTest {
 
     @InjectMock
-    PinContentService service;
+    PinAgent agent;
 
     @Test
     void generatesPins() {
         PinIdea pin = new PinIdea("15-Minute Vegan Dinners", "Quick meals. Save for later!",
                 List.of("#vegan"), "Bowl of noodles", List.of("Vegan Recipes"), "Overhead shot");
-        when(service.generate(any(PinRequest.class)))
-                .thenReturn(new PinResponse("vegan dinners", "claude-opus-5", List.of(pin)));
+        when(agent.generate(any(PinRequest.class)))
+                .thenReturn(new PinResponse("vegan dinners", "claude-opus-5", null, 1, List.of(pin)));
 
         given().contentType(ContentType.JSON)
                 .body("{\"topic\":\"vegan dinners\",\"variations\":1}")
@@ -46,7 +46,7 @@ class PinContentResourceTest {
                 .body("{\"topic\":\"  \"}")
                 .when().post("/api/pins/generate")
                 .then().statusCode(400);
-        verify(service, never()).generate(any());
+        verify(agent, never()).generate(any());
     }
 
     @Test
@@ -63,7 +63,7 @@ class PinContentResourceTest {
 
     @Test
     void mapsGenerationFailure() {
-        when(service.generate(any(PinRequest.class))).thenThrow(new PinGenerationException(422, "declined"));
+        when(agent.generate(any(PinRequest.class))).thenThrow(new PinGenerationException(422, "declined"));
 
         given().contentType(ContentType.JSON)
                 .body("{\"topic\":\"x\"}")

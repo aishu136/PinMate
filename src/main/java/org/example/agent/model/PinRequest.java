@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.hibernate.validator.constraints.URL;
 
+import java.io.Serializable;
+
 /**
  * Input for pin content generation.
  *
@@ -20,7 +22,7 @@ public record PinRequest(
         @URL @Size(max = 2048) String url,
         @Size(max = 200) String audience,
         @Size(max = 50) String tone,
-        @Min(1) @Max(5) Integer variations) {
+        @Min(1) @Max(5) Integer variations) implements Serializable {
 
     public static final int DEFAULT_VARIATIONS = 3;
 

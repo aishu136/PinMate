@@ -8,6 +8,7 @@
 
     <properties>
         <anthropic-java.version>2.34.0</anthropic-java.version>
+        <langgraph4j.version>1.9.0</langgraph4j.version>
         <compiler-plugin.version>3.14.1</compiler-plugin.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -56,6 +57,11 @@
             <groupId>com.anthropic</groupId>
             <artifactId>anthropic-java</artifactId>
             <version>${anthropic-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-core</artifactId>
+            <version>${langgraph4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
