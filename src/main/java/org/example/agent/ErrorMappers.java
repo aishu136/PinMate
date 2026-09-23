@@ -40,7 +40,8 @@ public class ErrorMappers {
         }
         if (e instanceof UnauthorizedException || e instanceof PermissionDeniedException) {
             LOG.error("Claude API rejected the configured credentials", e);
-            return error(503, "not_configured", "The AI service credentials are invalid.");
+            // The SDK sends requests even with no key configured, so a missing key also surfaces as a 401.
+            return error(503, "not_configured", "The AI service credentials are missing or invalid. Set ANTHROPIC_API_KEY.");
         }
         LOG.errorf(e, "Claude API error (status %d)", e.statusCode());
         int status = e.statusCode() >= 500 ? 503 : 502;
