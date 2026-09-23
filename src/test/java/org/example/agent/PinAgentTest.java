@@ -2,6 +2,7 @@ package org.example.agent;
 
 import com.anthropic.errors.RateLimitException;
 import org.example.agent.model.PinIdea;
+import org.example.agent.model.PinImage;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.PinResponse;
 import org.example.agent.model.SourcePage;
@@ -42,7 +43,7 @@ class PinAgentTest {
 
     @Test
     void noUrlSkipsFetch() {
-        when(writer.write(any(), any(), any())).thenReturn(draft(pin("A"), pin("B")));
+        when(writer.write(any(), any(), any(), any())).thenReturn(draft(pin("A"), pin("B")));
 
         PinResponse response = agent(TestConfig.defaults()).generate(new PinRequest("topic", null, null, null, 2));
 
@@ -57,7 +58,7 @@ class PinAgentTest {
     void urlIsFetchedAndPassedToWriter() {
         SourcePage page = new SourcePage(URL, true, "Brief.");
         when(reader.read(URL)).thenReturn(page);
-        when(writer.write(any(), eq(page), any())).thenReturn(draft(pin("A")));
+        when(writer.write(any(), eq(page), any(), any())).thenReturn(draft(pin("A")));
 
         PinResponse response = agent(TestConfig.defaults()).generate(new PinRequest("topic", " " + URL + " ", null, null, 1));
 
@@ -67,7 +68,7 @@ class PinAgentTest {
 
     @Test
     void fetchCanBeDisabled() {
-        when(writer.write(any(), isNull(), any())).thenReturn(draft(pin("A")));
+        when(writer.write(any(), isNull(), any(), any())).thenReturn(draft(pin("A")));
 
         agent(new TestConfig(false, 2)).generate(new PinRequest("topic", URL, null, null, 1));
 
@@ -76,7 +77,7 @@ class PinAgentTest {
 
     @Test
     void retriesWithFeedbackWhenOutputIsShort() {
-        when(writer.write(any(), any(), any()))
+        when(writer.write(any(), any(), any(), any()))
                 .thenReturn(draft(pin("A")))
                 .thenReturn(draft(pin("A"), pin("B"), pin("C")));
 
@@ -84,17 +85,30 @@ class PinAgentTest {
 
         assertEquals(2, response.attempts());
         assertEquals(3, response.pins().size());
-        verify(writer).write(any(), any(), eq(""));
-        verify(writer).write(any(), any(), eq("Only 1 of the 3 requested pins were returned."));
+        verify(writer).write(any(), any(), any(), eq(""));
+        verify(writer).write(any(), any(), any(), eq("Only 1 of the 3 requested pins were returned."));
+    }
+
+    @Test
+    void imageReachesEveryGeneratePass() {
+        PinImage image = new PinImage(new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1}, PinImage.JPEG);
+        when(writer.write(any(), any(), any(), any()))
+                .thenReturn(draft(pin("A")))
+                .thenReturn(draft(pin("A"), pin("B")));
+
+        agent(TestConfig.defaults()).generate(new PinRequest(null, null, null, null, 2), image);
+
+        // state is serialized between steps, so match by value
+        verify(writer, times(2)).write(any(), isNull(), eq(image), any());
     }
 
     @Test
     void stopsAtMaxAttemptsAndReturnsBestEffort() {
-        when(writer.write(any(), any(), any())).thenReturn(draft(pin("Same"), pin("same")));
+        when(writer.write(any(), any(), any(), any())).thenReturn(draft(pin("Same"), pin("same")));
 
         PinResponse response = agent(TestConfig.defaults()).generate(new PinRequest("topic", null, null, null, 2));
 
-        verify(writer, times(2)).write(any(), any(), any());
+        verify(writer, times(2)).write(any(), any(), any(), any());
         assertEquals(2, response.attempts());
         assertEquals(2, response.pins().size());
     }
@@ -102,7 +116,7 @@ class PinAgentTest {
     @Test
     void nodeFailuresSurfaceUnwrapped() {
         PinGenerationException refusal = new PinGenerationException(422, "declined");
-        when(writer.write(any(), any(), any())).thenThrow(refusal);
+        when(writer.write(any(), any(), any(), any())).thenThrow(refusal);
 
         PinGenerationException thrown = assertThrows(PinGenerationException.class,
                 () -> agent(TestConfig.defaults()).generate(new PinRequest("topic", null, null, null, 1)));

@@ -16,7 +16,8 @@ START ─┬─ has url ─> fetch_page ─┐
 
 - **fetch_page** (`PageReader`): Claude reads the URL with its server-side web fetch tool (restricted to the
   URL's own domain) and writes a short brief. If the page can't be read, generation continues from the topic alone.
-- **generate** (`PinWriter`): Claude writes the pins with structured output; Pinterest limits are enforced in code.
+- **generate** (`PinWriter`): Claude writes the pins with structured output, looking at the uploaded image
+  when there is one; Pinterest limits are enforced in code.
 - **validate**: if fewer pins than requested came back, or titles repeat, `generate` runs again with feedback
   (up to `pinterest-agent.max-attempts` passes in total).
 
@@ -74,6 +75,26 @@ curl -X POST http://localhost:8080/api/pins/generate \
 }
 ```
 
+### `POST /api/pins/generate-from-image`
+
+Upload the pin image and get copy written for it: alt text describes what the image actually shows,
+and `imageIdea` becomes a text-overlay or styling suggestion. Send `multipart/form-data` with:
+
+| Field        | Required | Notes                                                        |
+|--------------|----------|--------------------------------------------------------------|
+| `image`      | yes      | JPEG, PNG, GIF or WebP, up to 5 MB (format is detected from the file) |
+| `topic`      | no       | Inferred from the image when omitted                         |
+| `url`, `audience`, `tone`, `variations` | no | Same as `/generate`; a URL is still read and used |
+
+```shell
+curl -X POST http://localhost:8080/api/pins/generate-from-image \
+  -F "image=@living-room.jpg" \
+  -F "topic=cozy fall living room decor" \
+  -F "variations=3"
+```
+
+The response has the same shape as `/generate` (`topic` is `null` when not given).
+
 Pinterest limits are enforced on every response (title ≤ 100 chars, description and alt text ≤ 500 chars,
 at most 8 de-duplicated `#hashtags`).
 
@@ -83,7 +104,9 @@ All errors return `{"error": "...", "message": "..."}`.
 
 | Status | Meaning                                                         |
 |--------|-----------------------------------------------------------------|
-| 400    | Invalid request (blank topic, bad URL, variations outside 1–5)   |
+| 400    | Invalid request (blank topic, bad URL, variations outside 1–5, missing image) |
+| 413    | Image larger than 5 MB                                          |
+| 415    | Uploaded file isn't a JPEG, PNG, GIF or WebP image              |
 | 422    | Claude declined the request                                     |
 | 429    | Rate limited by the Claude API                                  |
 | 502    | Unusable model response (truncated / empty)                      |

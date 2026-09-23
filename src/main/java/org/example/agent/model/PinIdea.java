@@ -17,6 +17,6 @@ public record PinIdea(
         String altText,
         @JsonPropertyDescription("2 to 4 board names this pin would fit on")
         List<String> suggestedBoards,
-        @JsonPropertyDescription("Short description of the image or visual concept to create for this pin")
+        @JsonPropertyDescription("Visual concept to create for this pin, or a text-overlay/styling suggestion when an image is supplied")
         String imageIdea) implements Serializable {
 }

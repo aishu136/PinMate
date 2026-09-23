@@ -2,6 +2,8 @@ package org.example.agent;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.core.JsonValue;
+import com.anthropic.models.messages.Base64ImageSource;
+import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.Model;
 import com.anthropic.models.messages.OutputConfig;
@@ -13,12 +15,14 @@ import com.anthropic.models.messages.StructuredTextBlock;
 import com.anthropic.services.blocking.MessageService;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinIdeas;
+import org.example.agent.model.PinImage;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.SourcePage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,7 +54,7 @@ class PinWriterTest {
         SourcePage source = new SourcePage("https://example.com/recipes", true, "Ten vegan recipes under 20 minutes.");
 
         writer.write(new PinRequest("vegan dinners", "https://example.com/recipes", "busy parents", "playful", 1),
-                source, "Pin titles must all be different.");
+                source, null, "Pin titles must all be different.");
 
         MessageCreateParams params = capturedParams();
         OutputConfig outputConfig = params.outputConfig().orElseThrow();
@@ -59,7 +63,7 @@ class PinWriterTest {
         assertEquals(JsonValue.from("default"), params._additionalBodyProperties().get("fallbacks"));
         assertEquals(List.of("server-side-fallback-2026-07-01"), params._additionalHeaders().values("anthropic-beta"));
 
-        String prompt = params.messages().get(0).content().asString();
+        String prompt = promptText(params);
         assertTrue(prompt.contains("<topic>vegan dinners</topic>"));
         assertTrue(prompt.contains("<audience>busy parents</audience>"));
         assertTrue(prompt.contains("<page_brief>\nTen vegan recipes under 20 minutes.\n</page_brief>"));
@@ -69,7 +73,7 @@ class PinWriterTest {
     @Test
     void unreadablePageIsFlaggedInPrompt() {
         String prompt = PinWriter.buildUserPrompt(
-                new PinRequest("topic", "https://example.com", null, null, null), SourcePage.failed("https://example.com"), null);
+                new PinRequest("topic", "https://example.com", null, null, null), SourcePage.failed("https://example.com"), null, null);
         assertTrue(prompt.contains("could not be read"));
         assertFalse(prompt.contains("<page_brief>"));
         assertFalse(prompt.contains("<feedback>"));
@@ -82,7 +86,7 @@ class PinWriterTest {
                 List.of("Dinner Ideas", "Dinner Ideas", ""), "overhead shot");
         stubResponse(StopReason.END_TURN, new PinIdeas(List.of(messy, pin("Second"), pin("Third"))));
 
-        PinWriter.Draft draft = writer.write(new PinRequest("vegan dinners", null, null, null, 2), null, null);
+        PinWriter.Draft draft = writer.write(new PinRequest("vegan dinners", null, null, null, 2), null, null, null);
 
         assertEquals(2, draft.pins().size());
         assertEquals("claude-opus-5", draft.model());
@@ -96,7 +100,7 @@ class PinWriterTest {
     void refusalBecomes422() {
         stubResponse(StopReason.REFUSAL, null);
         PinGenerationException e = assertThrows(PinGenerationException.class,
-                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null));
+                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null));
         assertEquals(422, e.status());
     }
 
@@ -104,8 +108,27 @@ class PinWriterTest {
     void truncatedResponseBecomes502() {
         stubResponse(StopReason.MAX_TOKENS, null);
         PinGenerationException e = assertThrows(PinGenerationException.class,
-                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null));
+                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null));
         assertEquals(502, e.status());
+    }
+
+    @Test
+    void sendsImageBeforePromptAndInfersMissingTopic() {
+        stubResponse(StopReason.END_TURN, new PinIdeas(List.of(pin("Title"))));
+        PinImage image = new PinImage(new byte[] {(byte) 0x89, 'P', 'N', 'G'}, PinImage.PNG);
+
+        writer.write(new PinRequest(null, null, null, null, 1), null, image, null);
+
+        List<ContentBlockParam> blocks = capturedParams().messages().get(0).content().asBlockParams();
+        assertEquals(2, blocks.size());
+        Base64ImageSource source = blocks.get(0).asImage().source().asBase64();
+        assertEquals(Base64ImageSource.MediaType.IMAGE_PNG, source.mediaType());
+        assertEquals(Base64.getEncoder().encodeToString(image.data()), source.data());
+
+        String prompt = blocks.get(1).asText().text();
+        assertTrue(prompt.contains("for the attached image"));
+        assertTrue(prompt.contains("infer it from the image"));
+        assertFalse(prompt.contains("<topic>"));
     }
 
     @Test
@@ -114,6 +137,11 @@ class PinWriterTest {
         assertTrue(result.length() <= 20);
         assertEquals("one two three four…", result);
         assertEquals("short", PinWriter.truncate("  short ", 20));
+    }
+
+    private static String promptText(MessageCreateParams params) {
+        List<ContentBlockParam> blocks = params.messages().get(0).content().asBlockParams();
+        return blocks.get(blocks.size() - 1).asText().text();
     }
 
     private MessageCreateParams capturedParams() {

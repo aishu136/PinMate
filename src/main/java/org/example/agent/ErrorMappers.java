@@ -22,6 +22,11 @@ public class ErrorMappers {
     }
 
     @ServerExceptionMapper
+    public Response invalidImage(InvalidImageException e) {
+        return error(e.status(), "invalid_image", e.getMessage());
+    }
+
+    @ServerExceptionMapper
     public Response noCredentials(NoCredentialsException e) {
         LOG.error("No Anthropic credentials configured", e);
         return error(503, "not_configured", "The AI service is not configured. Set ANTHROPIC_API_KEY.");

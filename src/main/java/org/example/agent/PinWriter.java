@@ -1,19 +1,25 @@
 package org.example.agent;
 
 import com.anthropic.client.AnthropicClient;
+import com.anthropic.models.messages.Base64ImageSource;
+import com.anthropic.models.messages.ContentBlockParam;
+import com.anthropic.models.messages.ImageBlockParam;
 import com.anthropic.models.messages.JsonOutputFormat;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.OutputConfig;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
+import com.anthropic.models.messages.TextBlockParam;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinIdeas;
+import org.example.agent.model.PinImage;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.SourcePage;
 import org.jboss.logging.Logger;
 
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +46,8 @@ public class PinWriter {
             - End each description with a clear, specific call to action.
             - Make each variation meaningfully different in angle (e.g. how-to, list, inspiration, problem/solution).
             - When a page brief is provided, ground the copy in it; never invent facts, prices, statistics or claims.
+            - When an image is attached, it is the pin image: write alt text that describes what it actually shows,
+              make imageIdea a text-overlay or styling suggestion for it, and describe only what is visible.
             """;
 
     /** JSON schema derived from {@link PinIdeas}; computed once via the SDK's typed builder. */
@@ -62,9 +70,10 @@ public class PinWriter {
 
     /**
      * @param source   page brief from {@link PageReader}, or null
+     * @param image    uploaded pin image, or null
      * @param feedback problems with the previous attempt that this attempt must fix, or null
      */
-    public Draft write(PinRequest request, SourcePage source, String feedback) {
+    public Draft write(PinRequest request, SourcePage source, PinImage image, String feedback) {
         StructuredMessageCreateParams.Builder<PinIdeas> builder = MessageCreateParams.builder()
                 .model(config.model())
                 .maxTokens(config.maxTokens())
@@ -75,7 +84,7 @@ public class PinWriter {
                         .effort(OutputConfig.Effort.of(config.effort()))
                         .format(PIN_IDEAS_FORMAT)
                         .build())
-                .addUserMessage(buildUserPrompt(request, source, feedback));
+                .addUserMessageOfBlockParams(userContent(request, source, image, feedback));
 
         StructuredMessage<PinIdeas> message = client.messages().create(ClaudeRequests.withFallbacks(builder, config).build());
         LOG.debugf("Claude usage for topic '%s': %s", request.topic(), message.usage());
@@ -103,10 +112,30 @@ public class PinWriter {
         return new Draft(pins, message.model().asString());
     }
 
-    static String buildUserPrompt(PinRequest request, SourcePage source, String feedback) {
+    /** Image first (Claude reads images best before the question), then the text prompt. */
+    static List<ContentBlockParam> userContent(PinRequest request, SourcePage source, PinImage image, String feedback) {
+        TextBlockParam text = TextBlockParam.builder().text(buildUserPrompt(request, source, image, feedback)).build();
+        if (image == null) {
+            return List.of(ContentBlockParam.ofText(text));
+        }
+        ImageBlockParam imageBlock = ImageBlockParam.builder()
+                .source(Base64ImageSource.builder()
+                        .mediaType(Base64ImageSource.MediaType.of(image.mediaType()))
+                        .data(Base64.getEncoder().encodeToString(image.data()))
+                        .build())
+                .build();
+        return List.of(ContentBlockParam.ofImage(imageBlock), ContentBlockParam.ofText(text));
+    }
+
+    static String buildUserPrompt(PinRequest request, SourcePage source, PinImage image, String feedback) {
         StringBuilder sb = new StringBuilder()
-                .append("Create exactly ").append(request.variationsOrDefault())
-                .append(" Pinterest pin variations.\n\n<topic>").append(request.topic().strip()).append("</topic>\n");
+                .append("Create exactly ").append(request.variationsOrDefault()).append(" Pinterest pin variations")
+                .append(image == null ? ".\n\n" : " for the attached image.\n\n");
+        if (hasText(request.topic())) {
+            sb.append("<topic>").append(request.topic().strip()).append("</topic>\n");
+        } else {
+            sb.append("No topic was given; infer it from the image.\n");
+        }
         if (hasText(request.audience())) {
             sb.append("<audience>").append(request.audience().strip()).append("</audience>\n");
         }

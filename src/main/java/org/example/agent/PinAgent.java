@@ -7,11 +7,13 @@ import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.state.AgentState;
 import org.example.agent.model.PinIdea;
+import org.example.agent.model.PinImage;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.PinResponse;
 import org.example.agent.model.SourcePage;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +44,7 @@ public class PinAgent {
     /** Graph state. Every key uses the default last-value-wins channel. */
     static class PinState extends AgentState {
         static final String REQUEST = "request";
+        static final String IMAGE = "image";
         static final String SOURCE = "source";
         static final String PINS = "pins";
         static final String MODEL = "model";
@@ -54,6 +57,10 @@ public class PinAgent {
 
         PinRequest request() {
             return this.<PinRequest>value(REQUEST).orElseThrow();
+        }
+
+        PinImage image() {
+            return this.<PinImage>value(IMAGE).orElse(null);
         }
 
         SourcePage source() {
@@ -90,9 +97,19 @@ public class PinAgent {
     }
 
     public PinResponse generate(PinRequest request) {
+        return generate(request, null);
+    }
+
+    /** @param image uploaded pin image, or null */
+    public PinResponse generate(PinRequest request, PinImage image) {
+        Map<String, Object> input = new HashMap<>();
+        input.put(PinState.REQUEST, request);
+        if (image != null) {
+            input.put(PinState.IMAGE, image);
+        }
         PinState state;
         try {
-            state = graph.invoke(Map.of(PinState.REQUEST, request)).orElseThrow();
+            state = graph.invoke(input).orElseThrow();
         } catch (RuntimeException e) {
             throw unwrap(e);
         }
@@ -124,7 +141,7 @@ public class PinAgent {
     }
 
     private Map<String, Object> generate(PinState state) {
-        PinWriter.Draft draft = pinWriter.write(state.request(), state.source(), state.feedback());
+        PinWriter.Draft draft = pinWriter.write(state.request(), state.source(), state.image(), state.feedback());
         return Map.of(
                 PinState.PINS, draft.pins(),
                 PinState.MODEL, draft.model(),
