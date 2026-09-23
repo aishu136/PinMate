@@ -34,6 +34,17 @@ START ─┬─ has url ─> fetch_page ─┐
 
 Dev UI: <http://localhost:8080/q/dev/> · Health: <http://localhost:8080/q/health>
 
+### API key
+
+`/api/*` spends Claude credits and can post to your Pinterest account, so it is protected:
+
+- **`PINMATE_API_KEY` not set:** only requests from this machine (localhost) are accepted.
+- **`PINMATE_API_KEY` set:** every request, including from localhost, must send it:
+  `curl -H "X-API-Key: $PINMATE_API_KEY" ...`
+
+Behind a reverse proxy on the same machine every request looks local, so always set a key there.
+`/q/health` stays open.
+
 ## API
 
 ### `POST /api/pins/generate`
@@ -98,19 +109,75 @@ The response has the same shape as `/generate` (`topic` is `null` when not given
 Pinterest limits are enforced on every response (title ≤ 100 chars, description and alt text ≤ 500 chars,
 at most 8 de-duplicated `#hashtags`).
 
-### Errors
+## Publishing to Pinterest
+
+Generate first, review the copy, then publish the pin you like. Publishing uses the Pinterest API v5 with
+an access token for your account.
+
+1. Create an app at <https://developers.pinterest.com/apps/> and generate an access token with the scopes
+   `boards:read`, `pins:read` and `pins:write`.
+2. `export PINTEREST_ACCESS_TOKEN=pina_...` (PowerShell: `$env:PINTEREST_ACCESS_TOKEN="pina_..."`)
+3. If your app only has trial access, point it at the sandbox:
+   `export QUARKUS_REST_CLIENT_PINTEREST_URL=https://api-sandbox.pinterest.com/v5`
+
+> **Security:** these endpoints post to your Pinterest account. See [API key](#api-key) before exposing
+> the server beyond your own machine.
+
+### `GET /api/pinterest/boards`
+
+Lists your boards (`id`, `name`, `privacy`, `pinCount`) so you can pick a `boardId`.
+
+### `POST /api/pinterest/pins` — image from a URL
+
+`pin` accepts a pin object straight from `/api/pins/generate`. Hashtags are appended to the description
+(trailing tags are dropped if it would exceed Pinterest's 800-character limit).
+
+```shell
+curl -X POST http://localhost:8080/api/pinterest/pins \
+  -H "Content-Type: application/json" \
+  -d '{
+        "boardId": "1234567890",
+        "link": "https://example.com/vegan-recipes",
+        "imageUrl": "https://example.com/images/noodles.jpg",
+        "pin": {"title": "15-Minute Vegan Dinners", "description": "Quick meals... Save this pin!",
+                "hashtags": ["#vegandinner"], "altText": "Bowl of peanut noodles"}
+      }'
+```
+
+```json
+{ "id": "987654321", "boardId": "1234567890", "url": "https://www.pinterest.com/pin/987654321/" }
+```
+
+### `POST /api/pinterest/pins/upload` — upload the image
+
+Multipart form with `image` (JPEG or PNG only — Pinterest's upload limit), `boardId`, optional `link`,
+and `pin` as a JSON part:
+
+```shell
+curl -X POST http://localhost:8080/api/pinterest/pins/upload \
+  -F "image=@living-room.jpg" -F "boardId=1234567890" \
+  -F 'pin={"title":"Cozy Fall Living Room","description":"...","hashtags":["#falldecor"],"altText":"..."};type=application/json'
+```
+
+## Errors
 
 All errors return `{"error": "...", "message": "..."}`.
 
 | Status | Meaning                                                         |
 |--------|-----------------------------------------------------------------|
 | 400    | Invalid request (blank topic, bad URL, variations outside 1–5, missing image) |
+| 401    | Missing or wrong `X-API-Key` (see [API key](#api-key))          |
 | 413    | Image larger than 5 MB                                          |
 | 415    | Uploaded file isn't a JPEG, PNG, GIF or WebP image              |
 | 422    | Claude declined the request                                     |
 | 429    | Rate limited by the Claude API                                  |
 | 502    | Unusable model response (truncated / empty)                      |
 | 503    | Claude API unreachable, or API key missing/invalid              |
+
+Pinterest publishing errors use `pinterest_*` codes: `pinterest_not_configured` (503, token missing,
+invalid or expired), `pinterest_forbidden` (403), `pinterest_not_found` (404, e.g. wrong board),
+`pinterest_rejected` (422, Pinterest refused the pin, with its reason), `pinterest_rate_limited` (429),
+`pinterest_unavailable` (503) and `pinterest_error` (502).
 
 ## Configuration (`src/main/resources/application.properties`)
 

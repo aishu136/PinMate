@@ -6,8 +6,10 @@ import com.anthropic.errors.NoCredentialsException;
 import com.anthropic.errors.PermissionDeniedException;
 import com.anthropic.errors.RateLimitException;
 import com.anthropic.errors.UnauthorizedException;
+import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.core.Response;
 import org.example.agent.model.ErrorResponse;
+import org.example.agent.pinterest.PinterestApiException;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
@@ -51,6 +53,32 @@ public class ErrorMappers {
         LOG.errorf(e, "Claude API error (status %d)", e.statusCode());
         int status = e.statusCode() >= 500 ? 503 : 502;
         return error(status, "upstream_error", "The AI service returned an error.");
+    }
+
+    @ServerExceptionMapper
+    public Response pinterest(PinterestApiException e) {
+        return switch (e.status()) {
+            case 401 -> {
+                LOG.warnf("Pinterest rejected the access token: %s", e.getMessage());
+                yield error(503, "pinterest_not_configured",
+                        "The Pinterest access token is missing, invalid or expired. Set PINTEREST_ACCESS_TOKEN.");
+            }
+            case 403 -> error(403, "pinterest_forbidden", "Pinterest refused: " + e.getMessage());
+            case 404 -> error(404, "pinterest_not_found", "Pinterest: " + e.getMessage());
+            case 429 -> error(429, "pinterest_rate_limited", "Too many requests to Pinterest. Try again shortly.");
+            case 400, 409, 422 -> error(422, "pinterest_rejected", "Pinterest rejected the pin: " + e.getMessage());
+            default -> {
+                LOG.errorf("Pinterest API error (status %d): %s", e.status(), e.getMessage());
+                yield error(502, "pinterest_error", "Pinterest returned an error.");
+            }
+        };
+    }
+
+    /** Raised by the REST client when Pinterest can't be reached. */
+    @ServerExceptionMapper
+    public Response pinterestUnreachable(ProcessingException e) {
+        LOG.warn("Could not reach the Pinterest API", e);
+        return error(503, "pinterest_unavailable", "Pinterest could not be reached. Try again shortly.");
     }
 
     private static Response error(int status, String code, String message) {

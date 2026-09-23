@@ -158,7 +158,7 @@ public class PinWriter {
     }
 
     /** Model output is guided by the prompt, but Pinterest limits are enforced here as a hard guarantee. */
-    static PinIdea enforceLimits(PinIdea pin) {
+    public static PinIdea enforceLimits(PinIdea pin) {
         return new PinIdea(
                 truncate(pin.title(), MAX_TITLE),
                 truncate(pin.description(), MAX_DESCRIPTION),
@@ -186,7 +186,7 @@ public class PinWriter {
         return seen.stream().limit(MAX_HASHTAGS).toList();
     }
 
-    static String truncate(String value, int max) {
+    public static String truncate(String value, int max) {
         if (value == null) {
             return null;
         }
