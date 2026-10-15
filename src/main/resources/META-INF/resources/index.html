@@ -64,12 +64,12 @@
   .brand svg { width: 30px; height: 30px; }
   .brand small { font-weight: 400; font-size: 14px; color: var(--muted); }
 
-  #create-view {
+  .split {
     display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 24px;
     max-width: 1400px; margin: 0 auto; padding: 24px;
   }
   @media (max-width: 860px) {
-    #create-view { grid-template-columns: 1fr; padding: 16px; }
+    .split { grid-template-columns: 1fr; padding: 16px; }
     header { padding: 12px 16px; }
     .brand small { display: none; }
   }
@@ -198,6 +198,40 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   [hidden] { display: none !important; }
 
+  .pages-head { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 6px; font-size: 13px; }
+  .count.over { color: var(--danger); font-weight: 700; }
+  .link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; font-size: 13px; }
+  #bulk-view .panel { position: static; } /* the job list can be taller than the screen */
+  .page-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; }
+  .page-row { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 8px 12px; font-weight: 400; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .page-row:last-child { border-bottom: 0; }
+  .page-row input { margin-top: 3px; accent-color: var(--accent); }
+  .page-row > span { min-width: 0; }
+  .page-topic { display: block; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+  .page-url { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .jobs-title { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 24px 0 8px; }
+  .job-row { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+  .job-row[aria-current=true] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ring); }
+  .job-title { display: block; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+  .job-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .results-head h2 { overflow-wrap: anywhere; }
+  .progress { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+  .progress span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+  .bitem { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .bitem .stitle { font-weight: 700; overflow-wrap: anywhere; }
+  .bitem-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .bitem-top > div:first-child { min-width: 0; }
+  .bitem-top a.meta { display: block; overflow-wrap: anywhere; text-decoration: none; }
+  .bitem-top a.meta:hover { text-decoration: underline; }
+  .bitem-badges { display: flex; gap: 4px; flex-shrink: 0; }
+  .bitem .err { color: var(--danger); font-size: 13px; margin-top: 6px; }
+  .bitem details { margin-top: 8px; }
+  .bitem summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent); }
+  .bpin { border-top: 1px solid var(--border); padding: 10px 0 2px; margin-top: 10px; }
+  .bpin-title { font-weight: 700; }
+  .bpin p { margin: 4px 0; font-size: 14px; }
+  .bpin .row-btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
   .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 999px; }
   .tabs button { border: 0; background: transparent; padding: 6px 16px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); }
   .tabs button[aria-selected=true] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -244,6 +278,7 @@
   <nav class="tabs" role="tablist" aria-label="Views">
     <button type="button" role="tab" aria-selected="true" aria-controls="create-view" data-view="create-view">Create</button>
     <button type="button" role="tab" aria-selected="false" aria-controls="schedule-view" data-view="schedule-view">Scheduled<span class="tab-count" id="sched-count" hidden></span></button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="bulk-view" data-view="bulk-view">Bulk</button>
   </nav>
   <button class="icon-btn" id="settings-btn" type="button"><span class="dot" id="key-dot"></span>API key</button>
 </header>
@@ -257,7 +292,57 @@
   <div id="sched-list" aria-live="polite"></div>
 </main>
 
-<main id="create-view" role="tabpanel">
+<main id="bulk-view" class="split" role="tabpanel" hidden>
+  <section class="panel" aria-labelledby="bulk-title">
+    <h2 id="bulk-title">Bulk pins</h2>
+    <div class="alert" id="bulk-error" role="alert" hidden></div>
+    <label for="bulk-input">Sitemap, feed, or page URLs</label>
+    <textarea id="bulk-input" rows="4" placeholder="https://example.com/sitemap.xml&#10;or one page URL per line"></textarea>
+    <p class="hint">Sitemaps (including indexes and .xml.gz), RSS and Atom feeds work.</p>
+    <button type="button" class="btn block" id="bulk-load">Find pages</button>
+
+    <div id="bulk-step2" hidden>
+      <div class="pages-head">
+        <span class="count" id="bulk-count"></span>
+        <span><button type="button" class="link-btn" id="bulk-all">All</button> · <button type="button" class="link-btn" id="bulk-none">None</button></span>
+      </div>
+      <div class="page-list" id="bulk-pages"></div>
+      <div class="row">
+        <div>
+          <label for="bulk-audience">Audience <span class="opt">(optional)</span></label>
+          <input type="text" id="bulk-audience" maxlength="200" placeholder="busy parents">
+        </div>
+        <div>
+          <label for="bulk-tone">Tone <span class="opt">(optional)</span></label>
+          <input type="text" id="bulk-tone" maxlength="50" placeholder="playful" list="tones">
+        </div>
+      </div>
+      <label id="bulk-variations-label">Pins per page</label>
+      <div class="seg" role="group" aria-labelledby="bulk-variations-label" id="bulk-variations">
+        <button type="button" aria-pressed="false">1</button>
+        <button type="button" aria-pressed="false">2</button>
+        <button type="button" aria-pressed="true">3</button>
+        <button type="button" aria-pressed="false">4</button>
+        <button type="button" aria-pressed="false">5</button>
+      </div>
+      <button type="button" class="btn primary block" id="bulk-start">Write pins</button>
+      <p class="hint">Each page is a separate Claude request, so cost grows with the number of pages.</p>
+    </div>
+
+    <div id="bulk-jobs-wrap" hidden>
+      <h3 class="jobs-title">Jobs</h3>
+      <div id="bulk-jobs"></div>
+    </div>
+  </section>
+  <section id="bulk-detail" aria-live="polite">
+    <div class="empty">
+      <h3>Write pins for a whole site</h3>
+      <p>Paste a sitemap, an RSS or Atom feed, or a list of page URLs. Each page is read and gets its own set of pins.</p>
+    </div>
+  </section>
+</main>
+
+<main id="create-view" class="split" role="tabpanel">
   <section class="panel" aria-labelledby="form-title">
     <h2 id="form-title">Create pins</h2>
     <form id="gen-form" novalidate>
@@ -838,8 +923,14 @@
       t.setAttribute('aria-selected', String(on));
       $('#' + t.dataset.view).hidden = !on;
     }
-    history.replaceState(null, '', id === 'schedule-view' ? '#scheduled' : location.pathname + location.search);
+    history.replaceState(null, '', HASHES[id] || location.pathname + location.search);
     if (id === 'schedule-view') refreshSchedule();
+    if (id === 'bulk-view') {
+      refreshBulkJobs().then(() => {
+        const jobId = bulk.jobId || bulk.jobs[0]?.id; // reopen the last job, or show the newest
+        if (jobId) openJob(jobId);
+      });
+    }
   }
   for (const t of tabs) t.addEventListener('click', () => showView(t.dataset.view));
 
@@ -1015,8 +1106,331 @@
     img.src = thumbs.get(id);
   }
 
-  if (location.hash === '#scheduled') showView('schedule-view');
-  else refreshSchedule();
+  // ---------- bulk ----------
+  const bulk = { pages: [], source: null, variations: 3, jobId: null, jobs: [] };
+  let bulkTimer = null;
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function bulkError(msg) {
+    const box = $('#bulk-error');
+    box.textContent = msg;
+    box.hidden = !msg;
+  }
+
+  $('#bulk-load').addEventListener('click', async () => {
+    bulkError('');
+    const lines = $('#bulk-input').value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return bulkError('Paste a sitemap or feed URL, or a list of page URLs.');
+    const bad = lines.find(l => !/^https?:\/\/\S+$/i.test(l));
+    if (bad) return bulkError(`Not an http(s) URL: ${bad}`);
+    const btn = $('#bulk-load');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Loading…';
+    try {
+      if (lines.length === 1) {
+        try {
+          const d = await api('/api/bulk/discover', { json: { source: lines[0] } });
+          bulk.source = d.source;
+          bulk.max = d.maxItemsPerJob;
+          setPages(d.pages.map(p => ({ ...p, checked: true })));
+          if (!d.pages.length) bulkError('No page URLs found in that sitemap or feed.');
+          return;
+        } catch (err) {
+          if (err.code !== 'not_a_feed') throw err;
+          toast('Not a sitemap or feed, so using it as a single page');
+        }
+      }
+      bulk.source = null;
+      setPages([...new Set(lines)].map(url => ({ url, topic: '', checked: true })));
+    } catch (err) {
+      bulkError(describe(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Find pages';
+    }
+  });
+
+  function setPages(pages) {
+    const max = bulk.max || 50;
+    pages.forEach((p, i) => { p.checked = i < max; });
+    bulk.pages = pages;
+    const list = $('#bulk-pages');
+    list.replaceChildren();
+    pages.forEach(p => {
+      const row = el('label', 'page-row');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = p.checked;
+      cb.addEventListener('change', () => { p.checked = cb.checked; updateBulkCount(); });
+      const text = el('span');
+      text.append(el('span', 'page-topic', p.topic || 'Topic from page'), el('span', 'page-url', p.url));
+      row.append(cb, text);
+      list.append(row);
+    });
+    $('#bulk-step2').hidden = !pages.length;
+    updateBulkCount();
+  }
+
+  function updateBulkCount() {
+    const n = bulk.pages.filter(p => p.checked).length;
+    const max = bulk.max || 50;
+    $('#bulk-count').textContent = `${n} of ${bulk.pages.length} selected · up to ${max} per job`;
+    $('#bulk-count').classList.toggle('over', n > max);
+    const btn = $('#bulk-start');
+    btn.disabled = n === 0 || n > max;
+    btn.textContent = `Write pins for ${n} page${n === 1 ? '' : 's'}`;
+  }
+
+  $('#bulk-all').addEventListener('click', () => toggleAll(true));
+  $('#bulk-none').addEventListener('click', () => toggleAll(false));
+  function toggleAll(on) {
+    const boxes = $('#bulk-pages').querySelectorAll('input');
+    bulk.pages.forEach((p, i) => { p.checked = on; boxes[i].checked = on; });
+    updateBulkCount();
+  }
+
+  $('#bulk-variations').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    bulk.variations = Number(b.textContent);
+    for (const x of $('#bulk-variations').children) x.setAttribute('aria-pressed', String(x === b));
+  });
+
+  $('#bulk-start').addEventListener('click', async () => {
+    bulkError('');
+    const items = bulk.pages.filter(p => p.checked).map(p => ({ url: p.url, topic: p.topic || null }));
+    const btn = $('#bulk-start');
+    btn.disabled = true;
+    try {
+      const job = await api('/api/bulk', { json: {
+        source: bulk.source, items, variations: bulk.variations,
+        audience: $('#bulk-audience').value.trim() || null, tone: $('#bulk-tone').value.trim() || null
+      } });
+      bulk.pages = [];
+      $('#bulk-step2').hidden = true;
+      $('#bulk-input').value = '';
+      toast(`Started: ${job.counts.total} page${job.counts.total === 1 ? '' : 's'}`);
+      await refreshBulkJobs();
+      openJob(job.id, job);
+    } catch (err) {
+      bulkError(describe(err));
+    } finally {
+      updateBulkCount();
+    }
+  });
+
+  async function refreshBulkJobs() {
+    try {
+      bulk.jobs = await api('/api/bulk');
+    } catch {
+      return;
+    }
+    const list = $('#bulk-jobs');
+    list.replaceChildren();
+    $('#bulk-jobs-wrap').hidden = !bulk.jobs.length;
+    for (const j of bulk.jobs) {
+      const row = el('button', 'job-row');
+      row.type = 'button';
+      row.dataset.id = j.id;
+      row.setAttribute('aria-current', String(j.id === bulk.jobId));
+      row.append(el('span', 'job-title', jobTitle(j)), el('span', 'meta', jobSummary(j)));
+      row.addEventListener('click', async () => {
+        await openJob(j.id);
+        if (window.matchMedia('(max-width: 860px)').matches) $('#bulk-detail').scrollIntoView({ behavior: 'smooth' });
+      });
+      list.append(row);
+    }
+  }
+
+  const jobTitle = j => j.source ? j.source.replace(/^https?:\/\//, '') : `${j.counts.total} pasted URL${j.counts.total === 1 ? '' : 's'}`;
+  function jobSummary(j) {
+    const c = j.counts;
+    const parts = [`${c.done}/${c.total} done`];
+    if (c.failed) parts.push(`${c.failed} failed`);
+    if (c.cancelled) parts.push(`${c.cancelled} cancelled`);
+    parts.push(j.status === 'RUNNING' ? 'running' : fmtTime(j.createdAt));
+    return parts.join(' · ');
+  }
+
+  async function openJob(id, preloaded) {
+    bulk.jobId = id;
+    try {
+      renderJob(preloaded || await api(`/api/bulk/${id}`));
+    } catch (err) {
+      const a = el('div', 'alert', describe(err));
+      $('#bulk-detail').replaceChildren(a);
+    }
+    scheduleBulkPoll();
+  }
+
+  function scheduleBulkPoll() {
+    clearTimeout(bulkTimer);
+    bulkTimer = setTimeout(async () => {
+      if (!bulk.jobId || $('#bulk-view').hidden || document.visibilityState !== 'visible') return scheduleBulkPoll();
+      const current = bulk.jobs.find(j => j.id === bulk.jobId);
+      if (current && current.status !== 'RUNNING') return;
+      try {
+        const job = await api(`/api/bulk/${bulk.jobId}`);
+        renderJob(job);
+        if (job.status !== 'RUNNING') refreshBulkJobs();
+        else scheduleBulkPoll();
+      } catch {
+        scheduleBulkPoll();
+      }
+    }, 3000);
+  }
+
+  const ITEM_STATUS = {
+    PENDING: ['Waiting', 'sched'], RUNNING: ['Writing…', 'sched'], DONE: ['Done', 'ok'],
+    FAILED: ['Failed', 'fail'], CANCELLED: ['Cancelled', 'sched']
+  };
+
+  function renderJob(job) {
+    const idx = bulk.jobs.findIndex(j => j.id === job.id);
+    if (idx >= 0) bulk.jobs[idx] = { ...job, items: null };
+    for (const r of $('#bulk-jobs').children) r.setAttribute('aria-current', String(Number(r.dataset.id) === bulk.jobId));
+
+    const box = $('#bulk-detail');
+    // Keep open pin lists open across refreshes.
+    const open = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.id));
+    box.replaceChildren();
+
+    const head = el('div', 'results-head');
+    head.append(el('h2', null, jobTitle(job)), el('span', 'meta', jobSummary(job)));
+    const actions = el('div', 'job-actions');
+    if (job.status === 'RUNNING') actions.append(rowButton('Cancel', () => jobAction(job.id, 'cancel', 'Remaining pages cancelled')));
+    if (job.counts.failed || job.counts.cancelled) actions.append(rowButton('Retry failed', () => jobAction(job.id, 'retry', 'Queued again')));
+    if (job.counts.done) actions.append(rowButton('Export CSV', () => downloadCsv(job.id)));
+    if (job.status !== 'RUNNING') actions.append(rowButton('Delete', async () => {
+      if (!confirm('Delete this job and all its pins?')) return;
+      try {
+        await api(`/api/bulk/${job.id}`, { method: 'DELETE' });
+        bulk.jobId = null;
+        $('#bulk-detail').replaceChildren(bulkEmpty());
+        toast('Job deleted');
+      } catch (err) { toast(describe(err)); }
+      refreshBulkJobs();
+    }));
+    head.append(actions);
+    box.append(head);
+
+    const c = job.counts;
+    const bar = el('div', 'progress');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(c.total));
+    bar.setAttribute('aria-valuenow', String(c.done + c.failed + c.cancelled));
+    const fill = el('span');
+    fill.style.width = `${c.total ? Math.round(100 * (c.done + c.failed + c.cancelled) / c.total) : 0}%`;
+    bar.append(fill);
+    box.append(bar);
+
+    for (const item of job.items || []) box.append(bulkItemRow(job, item, open.has(String(item.id))));
+  }
+
+  function bulkItemRow(job, item, isOpen) {
+    const row = el('article', 'bitem');
+    const top = el('div', 'bitem-top');
+    const info = el('div');
+    info.append(el('div', 'stitle', item.topic));
+    const link = el('a', 'meta', item.url);
+    link.href = item.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    info.append(link);
+    const [label, cls] = ITEM_STATUS[item.status] || [item.status, 'sched'];
+    const badges = el('div', 'bitem-badges');
+    if (item.status === 'DONE' && item.pageRead === false) badges.append(el('span', 'badge warn', 'page not read'));
+    badges.append(el('span', 'badge ' + cls, label));
+    top.append(info, badges);
+    row.append(top);
+    if (item.error) row.append(el('div', 'err', item.error));
+
+    if (item.pins.length) {
+      const d = el('details');
+      d.dataset.id = item.id;
+      d.open = isOpen;
+      d.append(el('summary', null, `${item.pins.length} pin${item.pins.length === 1 ? '' : 's'}`));
+      item.pins.forEach(pin => {
+        const p = el('div', 'bpin');
+        p.append(el('div', 'bpin-title', pin.title), el('p', null, pin.description));
+        if (pin.hashtags?.length) p.append(el('div', 'meta', pin.hashtags.join(' ')));
+        const btns = el('div', 'row-btns');
+        btns.append(rowButton('Copy', () => copyPin(pin)));
+        btns.append(rowButton('Edit & publish', () => openInEditor(item, pin)));
+        p.append(btns);
+        d.append(p);
+      });
+      row.append(d);
+    }
+    return row;
+  }
+
+  /** Loads a page's pins into the Create view, where they can be edited, published or scheduled. */
+  function openInEditor(item, pin) {
+    setImage(null);
+    $('#topic').value = item.topic;
+    $('#url').value = item.url;
+    state.link = item.url;
+    const pins = [pin, ...item.pins.filter(p => p !== pin)];
+    renderResults({
+      topic: item.topic, model: item.model, attempts: item.attempts,
+      source: item.pageRead == null ? null : { url: item.url, fetched: item.pageRead, summary: item.pageSummary },
+      pins
+    });
+    showView('create-view');
+    window.scrollTo(0, 0);
+  }
+
+  async function jobAction(id, action, done) {
+    try {
+      renderJob(await api(`/api/bulk/${id}/${action}`, { method: 'POST' }));
+      toast(done);
+    } catch (err) {
+      toast(describe(err));
+    }
+    await refreshBulkJobs();
+    scheduleBulkPoll();
+  }
+
+  async function downloadCsv(id) {
+    const headers = {};
+    const key = store.get(KEY_STORAGE);
+    if (key) headers['X-API-Key'] = key;
+    try {
+      const res = await fetch(`/api/bulk/${id}/pins.csv`, { headers });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = el('a');
+      a.href = url;
+      a.download = `pinmate-bulk-${id}.csv`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function bulkEmpty() {
+    const e = el('div', 'empty');
+    e.append(el('h3', null, 'Write pins for a whole site'),
+      el('p', null, 'Paste a sitemap, an RSS or Atom feed, or a list of page URLs. Each page is read and gets its own set of pins.'));
+    return e;
+  }
+
+  const HASHES = { 'schedule-view': '#scheduled', 'bulk-view': '#bulk' };
+  const byHash = Object.fromEntries(Object.entries(HASHES).map(([k, v]) => [v, k]));
+  if (byHash[location.hash]) showView(byHash[location.hash]);
+  if (location.hash !== '#scheduled') refreshSchedule();
+
 
   // Pinterest uploads accept only JPEG and PNG; re-encode GIF/WebP in the browser.
   async function toPinterestImage(file) {

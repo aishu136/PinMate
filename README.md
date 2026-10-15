@@ -206,6 +206,39 @@ curl -X POST http://localhost:8080/api/schedule \
       }'
 ```
 
+## Bulk generation
+
+Write pins for many pages at once. In the web UI open **Bulk** (<http://localhost:8080/#bulk>), paste a sitemap,
+an RSS or Atom feed, or a list of page URLs, pick the pages, and start the job. Each page goes through the same agent
+as `/api/pins/generate` (read the page, write pins, check and retry), two pages at a time, in the background; the job
+keeps running if you close the page, and pages interrupted by a restart are written again. Results can be copied,
+opened in the editor to publish or schedule, or exported as CSV.
+
+Each page is a separate Claude request, so a job's cost grows with its size; jobs are capped at
+`pinmate.bulk.max-items` pages (default 50). Topics come from feed titles, or from the URL when there is none
+(`/blog/easy-vegan-dinners/` becomes "easy vegan dinners").
+
+Feeds are downloaded by the server. Sitemap indexes (up to 5 child sitemaps) and `.xml.gz` files work; at most 200
+pages are listed. Feeds on localhost or private network addresses are refused so the server can't be used to probe
+its own network (`pinmate.bulk.allow-private-hosts=true` turns that off, e.g. for a local test site).
+
+| Endpoint                         | Notes                                                                  |
+|----------------------------------|------------------------------------------------------------------------|
+| `POST /api/bulk/discover`        | `{"source": "<sitemap or feed URL>"}` → the pages in it, with topics   |
+| `POST /api/bulk`                 | `{"items": [{"url": "...", "topic": "optional"}], "source", "audience", "tone", "variations"}` → 201, the job |
+| `GET /api/bulk`                  | Jobs, newest first, with counts                                        |
+| `GET /api/bulk/{id}`             | A job with each page's status, error and pins                          |
+| `GET /api/bulk/{id}/pins.csv`    | All pins, one row per pin                                              |
+| `POST /api/bulk/{id}/cancel`     | Stops pages that haven't started                                       |
+| `POST /api/bulk/{id}/retry`      | Queues failed and cancelled pages again                                |
+| `DELETE /api/bulk/{id}`          | Deletes the job and its pins                                           |
+
+```shell
+curl -X POST http://localhost:8080/api/bulk/discover   -H "Content-Type: application/json" -d '{"source":"https://example.com/sitemap.xml"}'
+
+curl -X POST http://localhost:8080/api/bulk   -H "Content-Type: application/json"   -d '{"variations":2,"tone":"cozy","items":[{"url":"https://example.com/easy-vegan-dinners/"},{"url":"https://example.com/fall-decor"}]}'
+```
+
 ## Errors
 
 All errors return `{"error": "...", "message": "..."}`.
@@ -221,6 +254,10 @@ All errors return `{"error": "...", "message": "..."}`.
 | 429    | Rate limited by the Claude API                                  |
 | 502    | Unusable model response (truncated / empty)                      |
 | 503    | Claude API unreachable, or API key missing/invalid              |
+
+Bulk errors: `invalid_source` (400), `blocked_host` (400, private or local address), `feed_unreachable` (422),
+`not_a_feed` (422), `feed_too_large` (422, over 10 MB), `invalid_url` and `too_many_items` (400), `running` (409,
+deleting a job while a page is being written).
 
 Scheduling errors: `invalid_time` (400, unparseable or past `publishAt`), `not_found` (404), `not_failed` (409,
 retrying a pin that hasn't failed) and `publishing` (409, deleting a pin while it is being published).
@@ -244,7 +281,10 @@ invalid or expired), `pinterest_forbidden` (403), `pinterest_not_found` (404, e.
 | `pinterest-agent.fetch.max-content-tokens` | `20000`  | Cap on page content sent to Claude                   |
 | `pinmate.schedule.poll-interval`    | `30s`           | How often due scheduled pins are published           |
 | `pinmate.schedule.max-attempts`     | `3`             | Tries per scheduled pin when Pinterest is unreachable or busy |
-| `quarkus.datasource.jdbc.url`       | `jdbc:h2:file:./data/pinmate` | Where scheduled pins are stored         |
+| `pinmate.bulk.max-items`            | `50`            | Pages per bulk job                                   |
+| `pinmate.bulk.concurrency`          | `2`             | Bulk pages written at the same time                  |
+| `pinmate.bulk.allow-private-hosts`  | `false`         | Allow feeds on localhost / private network addresses |
+| `quarkus.datasource.jdbc.url`       | `jdbc:h2:file:./data/pinmate` | Where scheduled pins and bulk jobs are stored |
 
 Any property can be overridden with an env var, e.g. `PINTEREST_AGENT_EFFORT=medium`.
 

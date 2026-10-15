@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.example.agent.ApiException;
 import org.example.agent.ImageUploads;
 import org.example.agent.model.PinIdea;
 import org.hibernate.validator.constraints.URL;
@@ -109,7 +110,7 @@ public class ScheduleResource {
         try {
             return OffsetDateTime.parse(value.strip()).toInstant();
         } catch (DateTimeParseException e) {
-            throw new ScheduleException(400, "invalid_time",
+            throw new ApiException(400, "invalid_time",
                     "publishAt must be an ISO-8601 time with an offset, e.g. 2026-10-20T09:00:00Z.");
         }
     }

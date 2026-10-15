@@ -10,7 +10,6 @@ import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.core.Response;
 import org.example.agent.model.ErrorResponse;
 import org.example.agent.pinterest.PinterestApiException;
-import org.example.agent.schedule.ScheduleException;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
@@ -30,7 +29,7 @@ public class ErrorMappers {
     }
 
     @ServerExceptionMapper
-    public Response schedule(ScheduleException e) {
+    public Response api(ApiException e) {
         return error(e.status(), e.code(), e.getMessage());
     }
 

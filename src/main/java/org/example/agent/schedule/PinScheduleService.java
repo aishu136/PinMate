@@ -9,6 +9,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.ProcessingException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.example.agent.ApiException;
 import org.example.agent.InvalidImageException;
 import org.example.agent.PinWriter;
 import org.example.agent.model.PinIdea;
@@ -79,7 +80,7 @@ public class PinScheduleService {
     private ScheduledPin newPin(String boardId, String boardName, PinIdea pin, String link, Instant publishAt) {
         Instant now = Instant.now();
         if (publishAt.isBefore(now.minus(PAST_TOLERANCE))) {
-            throw new ScheduleException(400, "invalid_time", "publishAt is in the past.");
+            throw new ApiException(400, "invalid_time", "publishAt is in the past.");
         }
         ScheduledPin p = new ScheduledPin();
         p.status = ScheduledPin.Status.SCHEDULED;
@@ -118,7 +119,7 @@ public class PinScheduleService {
     public void delete(long id) {
         ScheduledPin p = find(id);
         if (p.status == ScheduledPin.Status.PUBLISHING) {
-            throw new ScheduleException(409, "publishing", "This pin is being published right now.");
+            throw new ApiException(409, "publishing", "This pin is being published right now.");
         }
         p.delete();
     }
@@ -128,7 +129,7 @@ public class PinScheduleService {
     public ScheduledPinView retry(long id) {
         ScheduledPin p = find(id);
         if (p.status != ScheduledPin.Status.FAILED) {
-            throw new ScheduleException(409, "not_failed", "Only failed pins can be retried.");
+            throw new ApiException(409, "not_failed", "Only failed pins can be retried.");
         }
         p.status = ScheduledPin.Status.SCHEDULED;
         p.attempts = 0;
@@ -244,7 +245,7 @@ public class PinScheduleService {
     private static ScheduledPin find(long id) {
         ScheduledPin p = ScheduledPin.findById(id);
         if (p == null) {
-            throw new ScheduleException(404, "not_found", "No scheduled pin with id " + id + ".");
+            throw new ApiException(404, "not_found", "No scheduled pin with id " + id + ".");
         }
         return p;
     }

@@ -183,7 +183,7 @@ public class PinAgent {
     }
 
     /** Node failures come back wrapped by the graph runner; surface the original so the error mappers apply. */
-    static RuntimeException unwrap(RuntimeException e) {
+    public static RuntimeException unwrap(RuntimeException e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof PinGenerationException || t instanceof AnthropicException) {
                 return (RuntimeException) t;
