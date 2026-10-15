@@ -14,6 +14,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.example.agent.ImageUploads;
 import org.example.agent.model.PinIdea;
 import org.hibernate.validator.constraints.URL;
@@ -31,6 +33,7 @@ import java.util.List;
 @Path("/api/schedule")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+@Tag(name = "Schedule")
 public class ScheduleResource {
 
     private final PinScheduleService service;
@@ -39,11 +42,13 @@ public class ScheduleResource {
         this.service = service;
     }
 
+    @Operation(summary = "List scheduled pins")
     @GET
     public List<ScheduledPinView> list(@QueryParam("status") ScheduledPin.Status status) {
         return service.list(status);
     }
 
+    @Operation(summary = "Get a scheduled pin")
     @GET
     @Path("/{id}")
     public ScheduledPinView get(@RestPath long id) {
@@ -51,12 +56,14 @@ public class ScheduleResource {
     }
 
     /** Schedules a pin whose image Pinterest downloads from {@code imageUrl}. */
+    @Operation(summary = "Schedule a pin with an image URL")
     @POST
     public Response schedule(@NotNull @Valid ScheduleRequest request) {
         return Response.status(201).entity(service.schedule(request)).build();
     }
 
     /** Schedules a pin with an uploaded JPEG or PNG; {@code pin} is a JSON form part. */
+    @Operation(summary = "Schedule a pin with an uploaded JPEG or PNG")
     @POST
     @Path("/upload")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
@@ -71,6 +78,7 @@ public class ScheduleResource {
         return Response.status(201).entity(view).build();
     }
 
+    @Operation(summary = "Get a scheduled pin's uploaded image")
     @GET
     @Path("/{id}/image")
     @Produces({"image/jpeg", "image/png"})
@@ -80,6 +88,7 @@ public class ScheduleResource {
                 .orElseGet(() -> Response.status(404).build());
     }
 
+    @Operation(summary = "Queue a failed pin to publish now")
     @POST
     @Path("/{id}/retry")
     @Consumes(MediaType.WILDCARD) // no body
@@ -88,6 +97,7 @@ public class ScheduleResource {
     }
 
     /** Cancels a pending pin, or removes a finished one from the list. Pins already on Pinterest stay there. */
+    @Operation(summary = "Cancel a pending pin or remove a finished one from the list")
     @DELETE
     @Path("/{id}")
     public Response delete(@RestPath long id) {

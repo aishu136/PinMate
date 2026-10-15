@@ -32,7 +32,7 @@ START ─┬─ has url ─> fetch_page ─┐
 ./mvnw quarkus:dev
 ```
 
-Web UI: <http://localhost:8080/> · Dev UI: <http://localhost:8080/q/dev/> · Health: <http://localhost:8080/q/health>
+Web UI: <http://localhost:8080/> · API docs: <http://localhost:8080/q/swagger-ui/> · Dev UI: <http://localhost:8080/q/dev/> · Health: <http://localhost:8080/q/health>
 
 ### Web UI
 
@@ -53,6 +53,9 @@ Behind a reverse proxy on the same machine every request looks local, so always 
 `/q/health` stays open.
 
 ## API
+
+Interactive docs are at `/q/swagger-ui/` and the OpenAPI spec at `/q/openapi` (`?format=json` for JSON), in dev mode
+and packaged builds. If the server sets `PINMATE_API_KEY`, click **Authorize** and enter it to try requests.
 
 ### `POST /api/pins/generate`
 

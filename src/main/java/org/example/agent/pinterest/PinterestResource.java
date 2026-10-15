@@ -11,6 +11,8 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.example.agent.ImageUploads;
 import org.example.agent.model.PinIdea;
 import org.hibernate.validator.constraints.URL;
@@ -24,6 +26,7 @@ import java.util.List;
 @Path("/api/pinterest")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+@Tag(name = "Pinterest")
 public class PinterestResource {
 
     private final PinPublisher publisher;
@@ -32,6 +35,7 @@ public class PinterestResource {
         this.publisher = publisher;
     }
 
+    @Operation(summary = "List the account's boards")
     @GET
     @Path("/boards")
     public List<PinterestDtos.Board> boards() {
@@ -39,6 +43,7 @@ public class PinterestResource {
     }
 
     /** Publishes a pin whose image Pinterest downloads from {@code imageUrl}. */
+    @Operation(summary = "Publish a pin with an image URL")
     @POST
     @Path("/pins")
     public PinPublisher.PublishedPin publish(@NotNull @Valid PublishRequest request) {
@@ -46,6 +51,7 @@ public class PinterestResource {
     }
 
     /** Publishes a pin with an uploaded JPEG or PNG; {@code pin} is a JSON form part. */
+    @Operation(summary = "Publish a pin with an uploaded JPEG or PNG")
     @POST
     @Path("/pins/upload")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
