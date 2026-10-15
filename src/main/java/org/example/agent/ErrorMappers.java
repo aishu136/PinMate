@@ -10,6 +10,7 @@ import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.core.Response;
 import org.example.agent.model.ErrorResponse;
 import org.example.agent.pinterest.PinterestApiException;
+import org.example.agent.schedule.ScheduleException;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
@@ -26,6 +27,11 @@ public class ErrorMappers {
     @ServerExceptionMapper
     public Response invalidImage(InvalidImageException e) {
         return error(e.status(), "invalid_image", e.getMessage());
+    }
+
+    @ServerExceptionMapper
+    public Response schedule(ScheduleException e) {
+        return error(e.status(), e.code(), e.getMessage());
     }
 
     @ServerExceptionMapper

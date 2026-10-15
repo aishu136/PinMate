@@ -166,6 +166,43 @@ curl -X POST http://localhost:8080/api/pinterest/pins/upload \
   -F 'pin={"title":"Cozy Fall Living Room","description":"...","hashtags":["#falldecor"],"altText":"..."};type=application/json'
 ```
 
+## Scheduling pins
+
+Queue a pin to publish later. In the web UI, choose **Publish → Later**; the **Scheduled** tab
+(<http://localhost:8080/#scheduled>) lists what's upcoming, failed and published.
+
+Scheduled pins are stored in an embedded H2 database in `./data/` (created on first start), and the server checks for
+due pins every 30 seconds, so it must be running at the scheduled time; pins that come due while it is down go out
+when it starts. When Pinterest is unreachable, busy (5xx) or rate limiting, a pin is retried after 1 and then 4 minutes;
+after `pinmate.schedule.max-attempts` tries, or straight away when Pinterest rejects the pin (wrong board, bad
+image, expired token), it is marked `FAILED` with the reason and can be retried. A pin that was mid-publish when the
+server stopped is marked `FAILED` rather than retried, since it may already be on Pinterest.
+
+| Endpoint                                | Notes                                                                 |
+|-----------------------------------------|-----------------------------------------------------------------------|
+| `POST /api/schedule`                    | Body of `POST /api/pinterest/pins` plus `publishAt` and optional `boardName` (shown in lists). 201 |
+| `POST /api/schedule/upload`             | Form of `POST /api/pinterest/pins/upload` plus `publishAt` and optional `boardName`. JPEG or PNG. 201 |
+| `GET /api/schedule[?status=...]`        | All pins, or those `SCHEDULED`, `PUBLISHING`, `PUBLISHED` or `FAILED` |
+| `GET /api/schedule/{id}`                | One pin, including `attempts`, `lastError` and `pinterestUrl`          |
+| `GET /api/schedule/{id}/image`          | The uploaded image                                                     |
+| `POST /api/schedule/{id}/retry`         | Puts a `FAILED` pin back in the queue to publish now                   |
+| `DELETE /api/schedule/{id}`             | Cancels a pending pin or removes a finished one from the list (it stays on Pinterest) |
+
+`publishAt` is an ISO-8601 time with an offset, e.g. `2026-10-20T09:00:00Z` or `2026-10-20T09:00:00+05:30`.
+
+```shell
+curl -X POST http://localhost:8080/api/schedule \
+  -H "Content-Type: application/json" \
+  -d '{
+        "boardId": "1234567890",
+        "publishAt": "2026-10-20T09:00:00Z",
+        "imageUrl": "https://example.com/images/noodles.jpg",
+        "link": "https://example.com/vegan-recipes",
+        "pin": {"title": "15-Minute Vegan Dinners", "description": "Quick meals... Save this pin!",
+                "hashtags": ["#vegandinner"], "altText": "Bowl of peanut noodles"}
+      }'
+```
+
 ## Errors
 
 All errors return `{"error": "...", "message": "..."}`.
@@ -181,6 +218,9 @@ All errors return `{"error": "...", "message": "..."}`.
 | 429    | Rate limited by the Claude API                                  |
 | 502    | Unusable model response (truncated / empty)                      |
 | 503    | Claude API unreachable, or API key missing/invalid              |
+
+Scheduling errors: `invalid_time` (400, unparseable or past `publishAt`), `not_found` (404), `not_failed` (409,
+retrying a pin that hasn't failed) and `publishing` (409, deleting a pin while it is being published).
 
 Pinterest publishing errors use `pinterest_*` codes: `pinterest_not_configured` (503, token missing,
 invalid or expired), `pinterest_forbidden` (403), `pinterest_not_found` (404, e.g. wrong board),
@@ -199,6 +239,9 @@ invalid or expired), `pinterest_forbidden` (403), `pinterest_not_found` (404, e.
 | `pinterest-agent.fetch.enabled`     | `true`          | Read destination URLs before writing                 |
 | `pinterest-agent.fetch.effort`      | `low`           | Effort for the page-reading call                     |
 | `pinterest-agent.fetch.max-content-tokens` | `20000`  | Cap on page content sent to Claude                   |
+| `pinmate.schedule.poll-interval`    | `30s`           | How often due scheduled pins are published           |
+| `pinmate.schedule.max-attempts`     | `3`             | Tries per scheduled pin when Pinterest is unreachable or busy |
+| `quarkus.datasource.jdbc.url`       | `jdbc:h2:file:./data/pinmate` | Where scheduled pins are stored         |
 
 Any property can be overridden with an env var, e.g. `PINTEREST_AGENT_EFFORT=medium`.
 

@@ -20,13 +20,13 @@ import java.util.Map;
 @Consumes(MediaType.APPLICATION_JSON)
 public class FakePinterest {
 
-    static volatile String lastAuthorization;
-    static volatile JsonNode lastPin;
-    static volatile String lastPageSize;
+    public static volatile String lastAuthorization;
+    public static volatile JsonNode lastPin;
+    public static volatile String lastPageSize;
     /** When non-zero, the next call fails with this status and a Pinterest-style error body. */
-    static volatile int failWith;
+    public static volatile int failWith;
 
-    static void reset() {
+    public static void reset() {
         lastAuthorization = null;
         lastPin = null;
         lastPageSize = null;

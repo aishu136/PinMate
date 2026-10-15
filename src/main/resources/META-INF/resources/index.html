@@ -64,12 +64,12 @@
   .brand svg { width: 30px; height: 30px; }
   .brand small { font-weight: 400; font-size: 14px; color: var(--muted); }
 
-  main {
+  #create-view {
     display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 24px;
     max-width: 1400px; margin: 0 auto; padding: 24px;
   }
   @media (max-width: 860px) {
-    main { grid-template-columns: 1fr; padding: 16px; }
+    #create-view { grid-template-columns: 1fr; padding: 16px; }
     header { padding: 12px 16px; }
     .brand small { display: none; }
   }
@@ -197,6 +197,42 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   [hidden] { display: none !important; }
+
+  .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 999px; }
+  .tabs button { border: 0; background: transparent; padding: 6px 16px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--muted); }
+  .tabs button[aria-selected=true] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .tab-count { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 12px; line-height: 20px; text-align: center; }
+  @media (max-width: 560px) {
+    header { flex-wrap: wrap; }
+    .tabs { order: 3; width: 100%; }
+    .tabs button { flex: 1; }
+  }
+
+  #when-later { margin-top: 10px; }
+  input[type=datetime-local] { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+
+  .schedule { max-width: 960px; margin: 0 auto; padding: 24px; }
+  @media (max-width: 860px) { .schedule { padding: 16px; } }
+  .schedule .results-head .btn { margin-left: auto; }
+  .sched-group h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 24px 0 10px; }
+  .srow {
+    display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px;
+  }
+  .srow .thumb { width: 64px; height: 96px; border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+  .srow .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .srow .stitle { font-weight: 700; overflow-wrap: anywhere; }
+  .srow .meta { margin-top: 2px; }
+  .srow .err { color: var(--danger); font-size: 13px; margin-top: 4px; }
+  .srow .sactions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .srow .sactions .row-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .badge.sched { color: var(--muted); border: 1px solid currentColor; }
+  .badge.fail { color: var(--danger); border: 1px solid currentColor; }
+  @media (max-width: 560px) {
+    .srow { grid-template-columns: 56px 1fr; }
+    .srow .thumb { width: 56px; height: 84px; }
+    .srow .sactions { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
+  }
 </style>
 </head>
 <body>
@@ -205,10 +241,23 @@
     <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="var(--accent)"/><path d="M12 24l3-11m-1 4c4 3 9 0 8-5s-9-6-11 0" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
     PinMate <small>AI pin writer</small>
   </div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" aria-selected="true" aria-controls="create-view" data-view="create-view">Create</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="schedule-view" data-view="schedule-view">Scheduled<span class="tab-count" id="sched-count" hidden></span></button>
+  </nav>
   <button class="icon-btn" id="settings-btn" type="button"><span class="dot" id="key-dot"></span>API key</button>
 </header>
 
-<main>
+<main class="schedule" id="schedule-view" role="tabpanel" hidden>
+  <div class="results-head">
+    <h2>Scheduled pins</h2>
+    <span class="meta" id="sched-meta"></span>
+    <button type="button" class="btn small" id="sched-refresh">Refresh</button>
+  </div>
+  <div id="sched-list" aria-live="polite"></div>
+</main>
+
+<main id="create-view" role="tabpanel">
   <section class="panel" aria-labelledby="form-title">
     <h2 id="form-title">Create pins</h2>
     <form id="gen-form" novalidate>
@@ -288,6 +337,15 @@
     <select id="board" required><option value="">Loading boards…</option></select>
     <label for="pub-link">Link <span class="opt">(optional)</span></label>
     <input type="url" id="pub-link" placeholder="https://example.com/your-post">
+    <label id="when-label">When</label>
+    <div class="seg" role="group" aria-labelledby="when-label" id="when">
+      <button type="button" aria-pressed="true" data-when="now">Now</button>
+      <button type="button" aria-pressed="false" data-when="later">Later</button>
+    </div>
+    <div id="when-later" hidden>
+      <input type="datetime-local" id="pub-time" aria-label="Publish date and time">
+      <p class="hint" id="tz-hint"></p>
+    </div>
     <div id="pub-image-url-wrap">
       <label for="pub-image-url">Image URL</label>
       <input type="url" id="pub-image-url" placeholder="https://example.com/pin.jpg">
@@ -640,6 +698,32 @@
     select.disabled = false;
   }
 
+  // ---------- when: now or later ----------
+  const pad = n => String(n).padStart(2, '0');
+  const toLocalInput = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const fmtTime = iso => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+
+  function setWhen(later) {
+    for (const b of $('#when').children) b.setAttribute('aria-pressed', String((b.dataset.when === 'later') === later));
+    $('#when-later').hidden = !later;
+    $('#publish-btn').textContent = later ? 'Schedule' : 'Publish';
+  }
+  $('#when').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const later = b.dataset.when === 'later';
+    setWhen(later);
+    if (later) $('#pub-time').focus();
+  });
+  $('#tz-hint').textContent = `Your time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. The server publishes it even when this page is closed.`;
+
+  /** Next quarter hour at least an hour from now. */
+  function defaultPublishTime() {
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+    return d;
+  }
+
   async function openPublish(i) {
     const pin = state.pins[i];
     state.publishing = i;
@@ -648,6 +732,9 @@
     $('#pub-link').value = state.link || '';
     $('#pub-image-url-wrap').hidden = !!state.image;
     $('#pub-image-note').hidden = !state.image;
+    $('#pub-time').value = toLocalInput(defaultPublishTime());
+    $('#pub-time').min = toLocalInput(new Date());
+    setWhen(false);
     $('#publish-btn').disabled = false;
     pubDialog.showModal();
     try {
@@ -672,16 +759,25 @@
     e.preventDefault();
     const pin = state.pins[state.publishing];
     const boardId = $('#board').value;
+    const boardName = state.boards?.find(b => b.id === boardId)?.name || null;
     const link = $('#pub-link').value.trim();
     const imageUrl = $('#pub-image-url').value.trim();
+    const later = !$('#when-later').hidden;
     if (!boardId) return publishError('Choose a board.');
     if (link && !/^https?:\/\/\S+$/i.test(link)) return publishError('The link must start with http:// or https://');
     if (!state.image && !/^https?:\/\/\S+$/i.test(imageUrl)) return publishError('Enter a public image URL, or upload an image before generating.');
+    let publishAt = null;
+    if (later) {
+      const when = new Date($('#pub-time').value);
+      if (isNaN(when)) return publishError('Pick a date and time.');
+      if (when < Date.now() - 60 * 1000) return publishError('Pick a time in the future.');
+      publishAt = when.toISOString();
+    }
 
     const payload = { title: pin.title, description: pin.description, hashtags: pin.hashtags, altText: pin.altText };
     const btn = $('#publish-btn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Publishing…';
+    btn.innerHTML = `<span class="spinner"></span> ${later ? 'Scheduling' : 'Publishing'}…`;
     try {
       let result;
       if (state.image) {
@@ -691,34 +787,236 @@
         form.append('boardId', boardId);
         if (link) form.append('link', link);
         form.append('pin', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
-        result = await api('/api/pinterest/pins/upload', { form });
+        if (later) {
+          if (boardName) form.append('boardName', boardName);
+          form.append('publishAt', publishAt);
+        }
+        result = await api(later ? '/api/schedule/upload' : '/api/pinterest/pins/upload', { form });
+      } else if (later) {
+        result = await api('/api/schedule', { json: { boardId, boardName, link: link || null, imageUrl, publishAt, pin: payload } });
       } else {
         result = await api('/api/pinterest/pins', { json: { boardId, link: link || null, imageUrl, pin: payload } });
       }
-      pin.published = result;
+      pin.published = later ? { scheduledAt: result.publishAt } : { url: result.url };
       const card = results.querySelector(`.card[data-index="${state.publishing}"]`);
-      if (card) showPublished(card, result);
+      if (card) showPublished(card, pin.published);
       pubDialog.close();
-      toast('Published to Pinterest');
+      toast(later ? `Scheduled for ${fmtTime(result.publishAt)}` : 'Published to Pinterest');
+      if (later) refreshSchedule();
     } catch (err) {
       publishError(describe(err));
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Publish';
+      btn.textContent = later ? 'Schedule' : 'Publish';
     }
   });
 
-  function showPublished(card, result) {
+  function showPublished(card, outcome) {
     const box = $('.published', card);
-    box.replaceChildren(document.createTextNode('Published · '));
     const a = document.createElement('a');
-    a.href = result.url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.textContent = 'View on Pinterest';
+    if (outcome.url) {
+      box.replaceChildren(document.createTextNode('Published · '));
+      a.href = outcome.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'View on Pinterest';
+    } else {
+      box.replaceChildren(document.createTextNode(`Scheduled for ${fmtTime(outcome.scheduledAt)} · `));
+      a.href = '#';
+      a.textContent = 'View schedule';
+      a.addEventListener('click', ev => { ev.preventDefault(); showView('schedule-view'); });
+    }
     box.append(a);
     box.hidden = false;
   }
+
+  // ---------- views ----------
+  const tabs = document.querySelectorAll('[role=tab]');
+  function showView(id) {
+    for (const t of tabs) {
+      const on = t.dataset.view === id;
+      t.setAttribute('aria-selected', String(on));
+      $('#' + t.dataset.view).hidden = !on;
+    }
+    history.replaceState(null, '', id === 'schedule-view' ? '#scheduled' : location.pathname + location.search);
+    if (id === 'schedule-view') refreshSchedule();
+  }
+  for (const t of tabs) t.addEventListener('click', () => showView(t.dataset.view));
+
+  // ---------- schedule list ----------
+  const thumbs = new Map(); // id -> object URL of an uploaded image
+  let scheduleLoading = false;
+
+  async function refreshSchedule() {
+    if (scheduleLoading) return;
+    scheduleLoading = true;
+    try {
+      renderSchedule(await api('/api/schedule'));
+    } catch (err) {
+      if (!$('#schedule-view').hidden) {
+        const a = document.createElement('div');
+        a.className = 'alert';
+        a.setAttribute('role', 'alert');
+        a.textContent = describe(err);
+        $('#sched-list').replaceChildren(a);
+      }
+    } finally {
+      scheduleLoading = false;
+    }
+  }
+  $('#sched-refresh').addEventListener('click', refreshSchedule);
+  // Statuses change on the server; poll while the list is on screen.
+  setInterval(() => {
+    if (!$('#schedule-view').hidden && document.visibilityState === 'visible') refreshSchedule();
+  }, 30000);
+
+  function renderSchedule(items) {
+    const upcoming = items.filter(p => p.status === 'SCHEDULED' || p.status === 'PUBLISHING');
+    const failed = items.filter(p => p.status === 'FAILED');
+    const published = items.filter(p => p.status === 'PUBLISHED')
+      .sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''));
+
+    const count = $('#sched-count');
+    count.textContent = upcoming.length;
+    count.hidden = upcoming.length === 0;
+    $('#sched-meta').textContent = `${upcoming.length} upcoming · ${failed.length} failed · ${published.length} published`;
+
+    const list = $('#sched-list');
+    list.replaceChildren();
+    if (!items.length) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      const h = document.createElement('h3');
+      h.textContent = 'Nothing scheduled';
+      const p = document.createElement('p');
+      p.textContent = 'Generate pins, choose Publish, then pick "Later" to queue one here.';
+      e.append(h, p);
+      list.append(e);
+    }
+    for (const [title, group] of [['Failed', failed], ['Upcoming', upcoming], ['Published', published]]) {
+      if (!group.length) continue;
+      const section = document.createElement('section');
+      section.className = 'sched-group';
+      const h = document.createElement('h3');
+      h.textContent = title;
+      section.append(h, ...group.map(scheduleRow));
+      list.append(section);
+    }
+    // Free thumbnails of pins that are gone.
+    const ids = new Set(items.map(p => p.id));
+    for (const [id, url] of thumbs) if (!ids.has(id)) { URL.revokeObjectURL(url); thumbs.delete(id); }
+  }
+
+  const STATUS = {
+    SCHEDULED: ['Scheduled', 'sched'], PUBLISHING: ['Publishing', 'sched'],
+    PUBLISHED: ['Published', 'ok'], FAILED: ['Failed', 'fail']
+  };
+
+  function scheduleRow(p) {
+    const row = document.createElement('article');
+    row.className = 'srow';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    const img = document.createElement('img');
+    img.alt = p.pin.altText || '';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.remove()); // leave the plain placeholder
+    if (p.hasImage) loadThumb(p.id, img);
+    else if (p.imageUrl) img.src = p.imageUrl;
+    thumb.append(img);
+
+    const info = document.createElement('div');
+    const t = document.createElement('div');
+    t.className = 'stitle';
+    t.textContent = p.pin.title || '(untitled pin)';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const board = p.boardName || `board ${p.boardId}`;
+    if (p.status === 'PUBLISHED') meta.textContent = `${board} · published ${fmtTime(p.publishedAt)}`;
+    else if (p.status === 'SCHEDULED' && p.attempts > 0) meta.textContent = `${board} · retrying ${fmtTime(p.nextAttemptAt)}`;
+    else meta.textContent = `${board} · ${fmtTime(p.publishAt)}`;
+    info.append(t, meta);
+    if (p.lastError) {
+      const err = document.createElement('div');
+      err.className = 'err';
+      err.textContent = p.lastError;
+      info.append(err);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'sactions';
+    const [label, cls] = STATUS[p.status] || [p.status, 'sched'];
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + cls;
+    badge.textContent = label;
+    const btns = document.createElement('div');
+    btns.className = 'row-btns';
+    if (p.pinterestUrl) {
+      const a = document.createElement('a');
+      a.className = 'btn small';
+      a.href = p.pinterestUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'View';
+      btns.append(a);
+    }
+    if (p.status === 'FAILED') {
+      btns.append(rowButton('Retry', () => scheduleAction(`/api/schedule/${p.id}/retry`, 'POST', 'Queued to publish now')));
+    }
+    if (p.status !== 'PUBLISHING') {
+      const pending = p.status === 'SCHEDULED';
+      btns.append(rowButton(pending ? 'Cancel' : 'Remove', () => {
+        if (pending && !confirm(`Cancel "${p.pin.title}"? It won't be published.`)) return;
+        return scheduleAction(`/api/schedule/${p.id}`, 'DELETE', pending ? 'Cancelled' : 'Removed from the list');
+      }));
+    }
+    actions.append(badge, btns);
+    row.append(thumb, info, actions);
+    return row;
+  }
+
+  function rowButton(text, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn small';
+    b.textContent = text;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await onClick(); } finally { b.disabled = false; }
+    });
+    return b;
+  }
+
+  async function scheduleAction(path, method, done) {
+    try {
+      await api(path, { method });
+      toast(done);
+    } catch (err) {
+      toast(describe(err));
+    }
+    await refreshSchedule();
+  }
+
+  // The image endpoint needs the API key header, so fetch it rather than pointing <img> at it.
+  async function loadThumb(id, img) {
+    if (!thumbs.has(id)) {
+      const headers = {};
+      const key = store.get(KEY_STORAGE);
+      if (key) headers['X-API-Key'] = key;
+      try {
+        const res = await fetch(`/api/schedule/${id}/image`, { headers });
+        if (!res.ok) return;
+        thumbs.set(id, URL.createObjectURL(await res.blob()));
+      } catch {
+        return;
+      }
+    }
+    img.src = thumbs.get(id);
+  }
+
+  if (location.hash === '#scheduled') showView('schedule-view');
+  else refreshSchedule();
 
   // Pinterest uploads accept only JPEG and PNG; re-encode GIF/WebP in the browser.
   async function toPinterestImage(file) {
