@@ -32,13 +32,20 @@ START ─┬─ has url ─> fetch_page ─┐
 ./mvnw quarkus:dev
 ```
 
-Dev UI: <http://localhost:8080/q/dev/> · Health: <http://localhost:8080/q/health>
+Web UI: <http://localhost:8080/> · Dev UI: <http://localhost:8080/q/dev/> · Health: <http://localhost:8080/q/health>
+
+### Web UI
+
+Open <http://localhost:8080/> to generate pins from a topic, a link or an image, edit the copy (with
+Pinterest's length limits shown as you type), copy it, or publish it to one of your boards. If the server
+sets `PINMATE_API_KEY`, enter the key under **API key**; it is kept in that browser only.
 
 ### API key
 
 `/api/*` spends Claude credits and can post to your Pinterest account, so it is protected:
 
-- **`PINMATE_API_KEY` not set:** only requests from this machine (localhost) are accepted.
+- **`PINMATE_API_KEY` not set:** only requests from this machine (localhost) are accepted, and browser
+  requests must come from PinMate's own page (other websites you have open can't call the API).
 - **`PINMATE_API_KEY` set:** every request, including from localhost, must send it:
   `curl -H "X-API-Key: $PINMATE_API_KEY" ...`
 
@@ -167,6 +174,7 @@ All errors return `{"error": "...", "message": "..."}`.
 |--------|-----------------------------------------------------------------|
 | 400    | Invalid request (blank topic, bad URL, variations outside 1–5, missing image) |
 | 401    | Missing or wrong `X-API-Key` (see [API key](#api-key))          |
+| 403    | Browser request from another website's page (no API key set)     |
 | 413    | Image larger than 5 MB                                          |
 | 415    | Uploaded file isn't a JPEG, PNG, GIF or WebP image              |
 | 422    | Claude declined the request                                     |

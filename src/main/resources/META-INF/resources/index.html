@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PinMate</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e60023'/%3E%3Cpath d='M12 24l3-11m-1 4c4 3 9 0 8-5s-9-6-11 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f5f3;
+    --surface: #ffffff;
+    --surface-2: #efedea;
+    --text: #1d1d1b;
+    --muted: #6b6965;
+    --border: #e1ded9;
+    --accent: #e60023;
+    --accent-hover: #ad081b;
+    --accent-text: #ffffff;
+    --ok: #127a3f;
+    --warn: #a35b00;
+    --danger: #c2001b;
+    --danger-bg: #fdecee;
+    --ring: rgba(230, 0, 35, .35);
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+    --radius: 16px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --surface: #1f1e1c;
+      --surface-2: #2a2926;
+      --text: #f2f0ec;
+      --muted: #a29f99;
+      --border: #383632;
+      --accent: #ff3354;
+      --accent-hover: #ff5c77;
+      --accent-text: #1a0005;
+      --ok: #4cc27f;
+      --warn: #f0a640;
+      --danger: #ff6b7f;
+      --danger-bg: #3a1a1f;
+      --ring: rgba(255, 51, 84, .4);
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; }
+  .brand svg { width: 30px; height: 30px; }
+  .brand small { font-weight: 400; font-size: 14px; color: var(--muted); }
+
+  main {
+    display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 24px;
+    max-width: 1400px; margin: 0 auto; padding: 24px;
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    header { padding: 12px 16px; }
+    .brand small { display: none; }
+  }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow); align-self: start;
+  }
+  @media (min-width: 861px) { .panel { position: sticky; top: 84px; } }
+  .panel h2 { margin: 0 0 16px; font-size: 17px; }
+
+  label { display: block; font-weight: 600; font-size: 13px; margin: 14px 0 6px; }
+  label .opt { font-weight: 400; color: var(--muted); }
+  input[type=text], input[type=url], input[type=password], textarea, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--surface); transition: border-color .15s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--ring); }
+  textarea { resize: vertical; min-height: 70px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .drop {
+    position: relative; border: 2px dashed var(--border); border-radius: 14px; padding: 18px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--surface-2); }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop.has-image { padding: 8px; }
+  .drop img { max-width: 100%; max-height: 220px; border-radius: 10px; display: block; margin: 0 auto; }
+  .drop .clear {
+    position: absolute; top: 12px; right: 12px; z-index: 1; border: 0; border-radius: 999px;
+    background: rgba(0,0,0,.65); color: #fff; padding: 4px 10px; cursor: pointer; font-size: 13px;
+  }
+
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 8px 0; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); cursor: pointer; font-weight: 600;
+  }
+  .seg button[aria-pressed=true] { background: var(--text); color: var(--surface); border-color: var(--text); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: 0; border-radius: 999px; padding: 10px 18px; font-weight: 600; cursor: pointer;
+    background: var(--surface-2); color: var(--text); text-decoration: none;
+  }
+  .btn:hover { filter: brightness(.96); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); }
+  .btn.primary:hover { background: var(--accent-hover); filter: none; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.block { width: 100%; margin-top: 20px; padding: 12px; font-size: 16px; }
+  .btn.small { padding: 7px 14px; font-size: 14px; }
+  .icon-btn { background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: 14px; }
+  .icon-btn .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .icon-btn .dot.on { background: var(--ok); }
+
+  .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .alert { border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; background: var(--danger-bg); color: var(--danger); }
+  .alert strong { display: block; }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+
+  .results-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+  .results-head h2 { margin: 0; font-size: 22px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .source { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
+  .source summary { cursor: pointer; font-weight: 600; }
+  .source p { margin: 8px 0 0; color: var(--muted); white-space: pre-wrap; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+  .badge.ok { color: var(--ok); border: 1px solid currentColor; }
+  .badge.warn { color: var(--warn); border: 1px solid currentColor; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; align-items: start; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .card .visual { aspect-ratio: 2 / 3; max-height: 420px; width: 100%; background: var(--surface-2); position: relative; overflow: hidden; }
+  .card .visual img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .visual .concept {
+    position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px;
+    background: linear-gradient(160deg, #f9d6cf 0%, #e9b7c8 45%, #a7b8e8 100%); color: #2a1d24;
+  }
+  .card .visual .concept .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; opacity: .7; }
+  .card .visual .concept p { margin: 6px 0 0; font-size: 14px; }
+  .card .visual .overlay-title {
+    position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px 12px; border-radius: 12px;
+    background: rgba(255,255,255,.9); color: #1d1d1b; font-weight: 800; font-size: 17px; line-height: 1.25;
+  }
+  .card .body { padding: 14px 16px 16px; }
+  .card .body label { margin-top: 10px; display: flex; justify-content: space-between; }
+  .card .body label:first-child { margin-top: 0; }
+  .count { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .count.over { color: var(--danger); font-weight: 700; }
+  .card input.title { font-weight: 700; }
+  .tip { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-top: 10px; }
+  .tip b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .actions .btn { flex: 1; }
+  .published { margin-top: 10px; font-size: 14px; color: var(--ok); }
+  .published a { color: inherit; font-weight: 600; }
+
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; border: 2px dashed var(--border); border-radius: var(--radius); }
+  .empty svg { width: 56px; height: 56px; opacity: .5; }
+  .empty h3 { color: var(--text); margin: 12px 0 4px; }
+
+  .skeleton { height: 520px; border-radius: var(--radius); background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface) 50%, var(--surface-2) 100%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+  dialog {
+    border: 0; border-radius: var(--radius); padding: 0; width: min(460px, calc(100vw - 32px));
+    background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog form { padding: 22px; }
+  dialog h3 { margin: 0 0 4px; font-size: 18px; }
+  /* Primary button comes first in the DOM so Enter submits it; row-reverse puts it on the right. */
+  dialog .dialog-actions { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 8px; margin-top: 20px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--text); color: var(--surface); padding: 10px 18px; border-radius: 999px; font-weight: 600;
+    transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="var(--accent)"/><path d="M12 24l3-11m-1 4c4 3 9 0 8-5s-9-6-11 0" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+    PinMate <small>AI pin writer</small>
+  </div>
+  <button class="icon-btn" id="settings-btn" type="button"><span class="dot" id="key-dot"></span>API key</button>
+</header>
+
+<main>
+  <section class="panel" aria-labelledby="form-title">
+    <h2 id="form-title">Create pins</h2>
+    <form id="gen-form" novalidate>
+      <label for="image">Image <span class="opt">(optional)</span></label>
+      <div class="drop" id="drop">
+        <input type="file" id="image" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="drop-hint">
+        <div id="drop-empty">
+          <strong>Drop an image</strong> or click to browse
+          <p class="hint" id="drop-hint">JPEG, PNG, GIF or WebP, up to 5 MB. Copy will be written for it.</p>
+        </div>
+        <img id="drop-preview" alt="Selected image preview" hidden>
+        <button type="button" class="clear" id="drop-clear" hidden>Remove</button>
+      </div>
+
+      <label for="topic">Topic <span class="opt" id="topic-opt" hidden>(optional with an image)</span></label>
+      <input type="text" id="topic" maxlength="300" placeholder="e.g. easy weeknight vegan dinners">
+
+      <label for="url">Destination link <span class="opt">(optional)</span></label>
+      <input type="url" id="url" maxlength="2048" placeholder="https://example.com/your-post">
+      <p class="hint">The page is read so the copy matches what it says.</p>
+
+      <div class="row">
+        <div>
+          <label for="audience">Audience <span class="opt">(optional)</span></label>
+          <input type="text" id="audience" maxlength="200" placeholder="busy parents">
+        </div>
+        <div>
+          <label for="tone">Tone <span class="opt">(optional)</span></label>
+          <input type="text" id="tone" maxlength="50" placeholder="playful" list="tones">
+          <datalist id="tones">
+            <option value="playful"><option value="minimal"><option value="luxury"><option value="cozy"><option value="inspirational"><option value="professional">
+          </datalist>
+        </div>
+      </div>
+
+      <label id="variations-label">Variations</label>
+      <div class="seg" role="group" aria-labelledby="variations-label" id="variations">
+        <button type="button" aria-pressed="false">1</button>
+        <button type="button" aria-pressed="false">2</button>
+        <button type="button" aria-pressed="true">3</button>
+        <button type="button" aria-pressed="false">4</button>
+        <button type="button" aria-pressed="false">5</button>
+      </div>
+
+      <button class="btn primary block" type="submit" id="gen-btn">Generate pins</button>
+    </form>
+  </section>
+
+  <section aria-live="polite" id="results">
+    <div class="empty" id="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="3"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+      <h3>Your pins will appear here</h3>
+      <p>Enter a topic or drop an image, then generate. You can edit each pin before you copy or publish it.</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settings-form">
+    <h3>API key</h3>
+    <p class="hint">Needed only when the server sets <code>PINMATE_API_KEY</code>. Saved in this browser.</p>
+    <label for="api-key">X-API-Key</label>
+    <input type="password" id="api-key" autocomplete="off">
+    <div class="dialog-actions">
+      <button class="btn primary" value="save">Save</button>
+      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="publish">
+  <form method="dialog" id="publish-form" novalidate>
+    <h3>Publish to Pinterest</h3>
+    <p class="hint" id="publish-title"></p>
+    <div class="alert" id="publish-error" hidden></div>
+    <label for="board">Board</label>
+    <select id="board" required><option value="">Loading boards…</option></select>
+    <label for="pub-link">Link <span class="opt">(optional)</span></label>
+    <input type="url" id="pub-link" placeholder="https://example.com/your-post">
+    <div id="pub-image-url-wrap">
+      <label for="pub-image-url">Image URL</label>
+      <input type="url" id="pub-image-url" placeholder="https://example.com/pin.jpg">
+      <p class="hint">A public image Pinterest can download. Or upload an image before generating.</p>
+    </div>
+    <p class="hint" id="pub-image-note" hidden>Uses the image you uploaded.</p>
+    <div class="dialog-actions">
+      <button class="btn primary" value="publish" id="publish-btn">Publish</button>
+      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<template id="card-tpl">
+  <article class="card">
+    <div class="visual"></div>
+    <div class="body">
+      <label>Title <span class="count" data-for="title"></span></label>
+      <input type="text" class="title" data-field="title" data-max="100">
+      <label>Description <span class="count" data-for="description"></span></label>
+      <textarea rows="5" data-field="description" data-max="500"></textarea>
+      <label>Hashtags</label>
+      <input type="text" data-field="hashtags" placeholder="#tag #another">
+      <label>Alt text <span class="count" data-for="altText"></span></label>
+      <textarea rows="2" data-field="altText" data-max="500"></textarea>
+      <div class="tip" data-part="idea"><b></b><span></span></div>
+      <div data-part="boards"><label>Suggested boards</label><div class="chips"></div></div>
+      <div class="actions">
+        <button type="button" class="btn small" data-action="copy">Copy</button>
+        <button type="button" class="btn small primary" data-action="publish">Publish</button>
+      </div>
+      <div class="published" hidden></div>
+    </div>
+  </article>
+</template>
+
+<script>
+(() => {
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+  const KEY_STORAGE = 'pinmate.apiKey';
+
+  const state = { image: null, imageUrl: null, variations: 3, pins: [], link: '', boards: null, publishing: null };
+
+  // ---------- storage (may be unavailable) ----------
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+    set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* ignore */ } }
+  };
+
+  // ---------- API ----------
+  async function api(path, { json, form, method } = {}) {
+    const headers = { Accept: 'application/json' };
+    const key = store.get(KEY_STORAGE);
+    if (key) headers['X-API-Key'] = key;
+    let body;
+    if (json !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(json); }
+    else if (form) body = form;
+    let res;
+    try {
+      res = await fetch(path, { method: method || (body ? 'POST' : 'GET'), headers, body });
+    } catch {
+      throw new ApiError('network', 'Could not reach the PinMate server. Is it running?');
+    }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      // Bean Validation failures come back as {title, violations: [{field, message}]}.
+      const violations = (data?.violations || []).map(v => `${String(v.field || '').split('.').pop()}: ${v.message}`).join('; ');
+      throw new ApiError(data?.error || res.status, data?.message || violations || data?.title || `Request failed (${res.status})`, res.status);
+    }
+    return data;
+  }
+  class ApiError extends Error {
+    constructor(code, message, status) { super(message); this.code = code; this.status = status; }
+  }
+  function describe(err) {
+    if (err.status === 401) return 'The server needs an API key. Click "API key" at the top to add it.';
+    return err.message;
+  }
+
+  // ---------- toast ----------
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  // ---------- API key settings ----------
+  function refreshKeyDot() { $('#key-dot').classList.toggle('on', !!store.get(KEY_STORAGE)); }
+  refreshKeyDot();
+  $('#settings-btn').addEventListener('click', () => {
+    $('#api-key').value = store.get(KEY_STORAGE);
+    $('#settings').returnValue = '';
+    $('#settings').showModal();
+  });
+  $('#settings').addEventListener('close', () => {
+    if ($('#settings').returnValue === 'save') {
+      store.set(KEY_STORAGE, $('#api-key').value.trim());
+      refreshKeyDot();
+      state.boards = null;
+      toast('API key saved');
+    }
+  });
+
+  // ---------- image picker ----------
+  const drop = $('#drop'), fileInput = $('#image');
+  function setImage(file) {
+    if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
+    state.image = null; state.imageUrl = null;
+    if (file) {
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast('Use a JPEG, PNG, GIF or WebP image'); file = null; }
+      else if (file.size > MAX_IMAGE_BYTES) { toast('Images must be 5 MB or smaller'); file = null; }
+    }
+    if (file) { state.image = file; state.imageUrl = URL.createObjectURL(file); }
+    $('#drop-preview').src = state.imageUrl || '';
+    $('#drop-preview').hidden = !file;
+    $('#drop-clear').hidden = !file;
+    $('#drop-empty').hidden = !!file;
+    drop.classList.toggle('has-image', !!file);
+    fileInput.hidden = !!file;
+    $('#topic-opt').hidden = !file;
+    if (!file) fileInput.value = '';
+  }
+  fileInput.addEventListener('change', () => setImage(fileInput.files[0]));
+  $('#drop-clear').addEventListener('click', e => { e.preventDefault(); setImage(null); });
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) setImage(e.dataTransfer.files[0]); });
+
+  // ---------- variations ----------
+  $('#variations').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.variations = Number(b.textContent);
+    for (const x of $('#variations').children) x.setAttribute('aria-pressed', String(x === b));
+  });
+
+  // ---------- generate ----------
+  const results = $('#results');
+  $('#gen-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const topic = $('#topic').value.trim();
+    const url = $('#url').value.trim();
+    const audience = $('#audience').value.trim();
+    const tone = $('#tone').value.trim();
+    if (!topic && !state.image) { showError('Add a topic or an image to write pins about.'); $('#topic').focus(); return; }
+    if (url && !/^https?:\/\/\S+$/i.test(url)) { showError('The destination link must start with http:// or https://'); $('#url').focus(); return; }
+
+    const btn = $('#gen-btn');
+    btn.disabled = true;
+    const started = Date.now();
+    const label = () => `<span class="spinner"></span> Writing pins… ${Math.round((Date.now() - started) / 1000)}s`;
+    btn.innerHTML = label();
+    const tick = setInterval(() => { btn.innerHTML = label(); }, 1000);
+    showSkeletons(state.variations);
+
+    try {
+      let data;
+      if (state.image) {
+        const form = new FormData();
+        form.append('image', state.image);
+        if (topic) form.append('topic', topic);
+        if (url) form.append('url', url);
+        if (audience) form.append('audience', audience);
+        if (tone) form.append('tone', tone);
+        form.append('variations', String(state.variations));
+        data = await api('/api/pins/generate-from-image', { form });
+      } else {
+        data = await api('/api/pins/generate', { json: { topic, url: url || null, audience: audience || null, tone: tone || null, variations: state.variations } });
+      }
+      state.link = url;
+      renderResults(data);
+    } catch (err) {
+      showError(describe(err));
+    } finally {
+      clearInterval(tick);
+      btn.disabled = false;
+      btn.textContent = 'Generate pins';
+    }
+  });
+
+  function showError(msg) {
+    results.replaceChildren();
+    const a = document.createElement('div');
+    a.className = 'alert';
+    a.setAttribute('role', 'alert');
+    const s = document.createElement('strong');
+    s.textContent = 'Something went wrong';
+    a.append(s, document.createTextNode(msg));
+    results.append(a);
+    if (state.pins.length) results.append(buildGrid());
+  }
+
+  function showSkeletons(n) {
+    const g = document.createElement('div');
+    g.className = 'grid';
+    for (let i = 0; i < n; i++) { const s = document.createElement('div'); s.className = 'skeleton'; g.append(s); }
+    results.replaceChildren(g);
+  }
+
+  function renderResults(data) {
+    state.pins = (data.pins || []).map(p => ({ ...p, hashtags: p.hashtags || [], suggestedBoards: p.suggestedBoards || [], published: null }));
+    results.replaceChildren();
+
+    const head = document.createElement('div');
+    head.className = 'results-head';
+    const h = document.createElement('h2');
+    h.textContent = data.topic ? data.topic : 'Pins for your image';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = `${state.pins.length} pin${state.pins.length === 1 ? '' : 's'} · ${data.model}` + (data.attempts > 1 ? ` · ${data.attempts} passes` : '');
+    head.append(h, meta);
+    results.append(head);
+
+    if (data.source) {
+      const d = document.createElement('details');
+      d.className = 'source';
+      const s = document.createElement('summary');
+      s.textContent = 'Destination page';
+      const b = document.createElement('span');
+      b.className = 'badge ' + (data.source.fetched ? 'ok' : 'warn');
+      b.textContent = data.source.fetched ? 'read' : 'could not read';
+      s.append(b);
+      const p = document.createElement('p');
+      p.textContent = data.source.fetched ? data.source.summary : 'The page could not be read, so the pins were written from the topic alone.';
+      d.append(s, p);
+      results.append(d);
+    }
+    results.append(buildGrid());
+  }
+
+  function buildGrid() {
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    state.pins.forEach((pin, i) => grid.append(buildCard(pin, i)));
+    return grid;
+  }
+
+  function buildCard(pin, i) {
+    const card = $('#card-tpl').content.firstElementChild.cloneNode(true);
+    const visual = $('.visual', card);
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay-title';
+    if (state.imageUrl) {
+      const img = document.createElement('img');
+      img.src = state.imageUrl;
+      img.alt = pin.altText || '';
+      visual.append(img, overlay);
+    } else {
+      const c = document.createElement('div');
+      c.className = 'concept';
+      const l = document.createElement('div');
+      l.className = 'label';
+      l.textContent = 'Image concept';
+      const p = document.createElement('p');
+      p.textContent = pin.imageIdea || 'No image concept returned.';
+      c.append(l, p);
+      visual.append(c, overlay);
+    }
+
+    const refresh = () => {
+      overlay.textContent = pin.title;
+      overlay.hidden = !pin.title;
+      for (const el of card.querySelectorAll('[data-max]')) {
+        const counter = $(`[data-for="${el.dataset.field}"]`, card);
+        const len = el.value.length, max = Number(el.dataset.max);
+        counter.textContent = `${len}/${max}`;
+        counter.classList.toggle('over', len > max);
+      }
+    };
+    for (const el of card.querySelectorAll('[data-field]')) {
+      const f = el.dataset.field;
+      el.value = f === 'hashtags' ? pin.hashtags.join(' ') : (pin[f] || '');
+      el.addEventListener('input', () => {
+        if (f === 'hashtags') pin.hashtags = parseTags(el.value);
+        else pin[f] = el.value;
+        refresh();
+      });
+    }
+    refresh();
+
+    const idea = $('[data-part=idea]', card);
+    if (state.imageUrl && pin.imageIdea) {
+      $('b', idea).textContent = 'Styling tip';
+      $('span', idea).textContent = pin.imageIdea;
+    } else idea.hidden = true;
+
+    const boards = $('[data-part=boards]', card);
+    if (pin.suggestedBoards.length) {
+      for (const name of pin.suggestedBoards) {
+        const c = document.createElement('span');
+        c.className = 'chip';
+        c.textContent = name;
+        $('.chips', boards).append(c);
+      }
+    } else boards.hidden = true;
+
+    $('[data-action=copy]', card).addEventListener('click', () => copyPin(pin));
+    $('[data-action=publish]', card).addEventListener('click', () => openPublish(i));
+    if (pin.published) showPublished(card, pin.published);
+    card.dataset.index = i;
+    return card;
+  }
+
+  function parseTags(text) {
+    const seen = new Set();
+    return text.split(/[\s,]+/).filter(Boolean)
+      .map(t => '#' + t.replace(/^#+/, ''))
+      .filter(t => t.length > 1 && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()));
+  }
+
+  async function copyPin(pin) {
+    const text = [pin.title, pin.description, pin.hashtags.join(' ')].filter(Boolean).join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    toast('Copied title, description and hashtags');
+  }
+
+  // ---------- publish ----------
+  const pubDialog = $('#publish');
+
+  async function loadBoards(pin) {
+    const select = $('#board');
+    if (!state.boards) {
+      select.replaceChildren(new Option('Loading boards…', ''));
+      select.disabled = true;
+      state.boards = await api('/api/pinterest/boards');
+    }
+    select.replaceChildren(new Option(state.boards.length ? 'Choose a board' : 'No boards found', ''));
+    const wanted = pin.suggestedBoards.map(b => b.toLowerCase());
+    let match = '';
+    for (const b of state.boards) {
+      select.append(new Option(b.privacy && b.privacy !== 'PUBLIC' ? `${b.name} (${b.privacy.toLowerCase()})` : b.name, b.id));
+      if (!match && wanted.includes((b.name || '').toLowerCase())) match = b.id;
+    }
+    select.value = match;
+    select.disabled = false;
+  }
+
+  async function openPublish(i) {
+    const pin = state.pins[i];
+    state.publishing = i;
+    $('#publish-title').textContent = pin.title;
+    $('#publish-error').hidden = true;
+    $('#pub-link').value = state.link || '';
+    $('#pub-image-url-wrap').hidden = !!state.image;
+    $('#pub-image-note').hidden = !state.image;
+    $('#publish-btn').disabled = false;
+    pubDialog.showModal();
+    try {
+      await loadBoards(pin);
+    } catch (err) {
+      state.boards = null;
+      $('#board').replaceChildren(new Option('Boards unavailable', ''));
+      publishError(err.code === 'pinterest_not_configured'
+        ? 'Pinterest isn’t connected. Set PINTEREST_ACCESS_TOKEN on the server and restart it.'
+        : describe(err));
+    }
+  }
+
+  function publishError(msg) {
+    const box = $('#publish-error');
+    box.textContent = msg;
+    box.hidden = false;
+  }
+
+  $('#publish-form').addEventListener('submit', async e => {
+    if (e.submitter?.value !== 'publish') return;
+    e.preventDefault();
+    const pin = state.pins[state.publishing];
+    const boardId = $('#board').value;
+    const link = $('#pub-link').value.trim();
+    const imageUrl = $('#pub-image-url').value.trim();
+    if (!boardId) return publishError('Choose a board.');
+    if (link && !/^https?:\/\/\S+$/i.test(link)) return publishError('The link must start with http:// or https://');
+    if (!state.image && !/^https?:\/\/\S+$/i.test(imageUrl)) return publishError('Enter a public image URL, or upload an image before generating.');
+
+    const payload = { title: pin.title, description: pin.description, hashtags: pin.hashtags, altText: pin.altText };
+    const btn = $('#publish-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Publishing…';
+    try {
+      let result;
+      if (state.image) {
+        const form = new FormData();
+        const image = await toPinterestImage(state.image);
+        form.append('image', image, image.name);
+        form.append('boardId', boardId);
+        if (link) form.append('link', link);
+        form.append('pin', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+        result = await api('/api/pinterest/pins/upload', { form });
+      } else {
+        result = await api('/api/pinterest/pins', { json: { boardId, link: link || null, imageUrl, pin: payload } });
+      }
+      pin.published = result;
+      const card = results.querySelector(`.card[data-index="${state.publishing}"]`);
+      if (card) showPublished(card, result);
+      pubDialog.close();
+      toast('Published to Pinterest');
+    } catch (err) {
+      publishError(describe(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Publish';
+    }
+  });
+
+  function showPublished(card, result) {
+    const box = $('.published', card);
+    box.replaceChildren(document.createTextNode('Published · '));
+    const a = document.createElement('a');
+    a.href = result.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'View on Pinterest';
+    box.append(a);
+    box.hidden = false;
+  }
+
+  // Pinterest uploads accept only JPEG and PNG; re-encode GIF/WebP in the browser.
+  async function toPinterestImage(file) {
+    if (file.type === 'image/jpeg' || file.type === 'image/png') return file;
+    const bmp = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  }
+})();
+</script>
+</body>
+</html>
