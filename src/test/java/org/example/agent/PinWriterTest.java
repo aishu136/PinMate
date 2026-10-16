@@ -54,7 +54,7 @@ class PinWriterTest {
         SourcePage source = new SourcePage("https://example.com/recipes", true, "Ten vegan recipes under 20 minutes.");
 
         writer.write(new PinRequest("vegan dinners", "https://example.com/recipes", "busy parents", "playful", 1),
-                source, null, "Pin titles must all be different.");
+                source, null, "Pin titles must all be different.", null);
 
         MessageCreateParams params = capturedParams();
         OutputConfig outputConfig = params.outputConfig().orElseThrow();
@@ -86,7 +86,7 @@ class PinWriterTest {
                 List.of("Dinner Ideas", "Dinner Ideas", ""), "overhead shot");
         stubResponse(StopReason.END_TURN, new PinIdeas(List.of(messy, pin("Second"), pin("Third"))));
 
-        PinWriter.Draft draft = writer.write(new PinRequest("vegan dinners", null, null, null, 2), null, null, null);
+        PinWriter.Draft draft = writer.write(new PinRequest("vegan dinners", null, null, null, 2), null, null, null, null);
 
         assertEquals(2, draft.pins().size());
         assertEquals("claude-opus-5", draft.model());
@@ -100,7 +100,7 @@ class PinWriterTest {
     void refusalBecomes422() {
         stubResponse(StopReason.REFUSAL, null);
         PinGenerationException e = assertThrows(PinGenerationException.class,
-                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null));
+                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null, null));
         assertEquals(422, e.status());
     }
 
@@ -108,7 +108,7 @@ class PinWriterTest {
     void truncatedResponseBecomes502() {
         stubResponse(StopReason.MAX_TOKENS, null);
         PinGenerationException e = assertThrows(PinGenerationException.class,
-                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null));
+                () -> writer.write(new PinRequest("topic", null, null, null, null), null, null, null, null));
         assertEquals(502, e.status());
     }
 
@@ -117,7 +117,7 @@ class PinWriterTest {
         stubResponse(StopReason.END_TURN, new PinIdeas(List.of(pin("Title"))));
         PinImage image = new PinImage(new byte[] {(byte) 0x89, 'P', 'N', 'G'}, PinImage.PNG);
 
-        writer.write(new PinRequest(null, null, null, null, 1), null, image, null);
+        writer.write(new PinRequest(null, null, null, null, 1), null, image, null, null);
 
         List<ContentBlockParam> blocks = capturedParams().messages().get(0).content().asBlockParams();
         assertEquals(2, blocks.size());

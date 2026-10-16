@@ -21,6 +21,7 @@ import org.example.agent.ApiException;
 import org.example.agent.PinAgent;
 import org.example.agent.PinGenerationException;
 import org.example.agent.PinWriter;
+import org.example.agent.brand.BrandService;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.PinResponse;
@@ -46,15 +47,17 @@ public class BulkService {
 
     private final PinAgent agent;
     private final FeedReader feeds;
+    private final BrandService brands;
     private final ObjectMapper json;
     private final int maxItems;
     private final int concurrency;
 
-    public BulkService(PinAgent agent, FeedReader feeds, ObjectMapper json,
+    public BulkService(PinAgent agent, FeedReader feeds, BrandService brands, ObjectMapper json,
                        @ConfigProperty(name = "pinmate.bulk.max-items", defaultValue = "50") int maxItems,
                        @ConfigProperty(name = "pinmate.bulk.concurrency", defaultValue = "2") int concurrency) {
         this.agent = agent;
         this.feeds = feeds;
+        this.brands = brands;
         this.json = json;
         this.maxItems = Math.max(1, maxItems);
         this.concurrency = Math.max(1, concurrency);
@@ -81,7 +84,9 @@ public class BulkService {
             throw new ApiException(400, "too_many_items",
                     "A job can have at most " + maxItems + " pages; this one has " + unique.size() + ".");
         }
+        brands.resolve(request.brandId()); // 400 for an unknown brand
         BulkJob job = new BulkJob();
+        job.brandId = request.brandId();
         job.source = blankToNull(request.source());
         job.audience = blankToNull(request.audience());
         job.tone = blankToNull(request.tone());
@@ -230,17 +235,17 @@ public class BulkService {
         return null;
     }
 
-    private record Work(String url, String topic, String audience, String tone, int variations) {
+    private record Work(String url, String topic, String audience, String tone, int variations, Long brandId) {
     }
 
     private void process(long id) {
         Work work = QuarkusTransaction.requiringNew().call(() -> {
             BulkItem i = BulkItem.findById(id);
-            return new Work(i.url, i.topic, i.job.audience, i.job.tone, i.job.variations);
+            return new Work(i.url, i.topic, i.job.audience, i.job.tone, i.job.variations, i.job.brandId);
         });
         try {
             PinResponse result = agent.generate(new PinRequest(work.topic(), work.url(), work.audience(), work.tone(),
-                    work.variations()));
+                    work.variations()), null, brands.resolveIfPresent(work.brandId()));
             String pinsJson = json.writeValueAsString(result.pins());
             QuarkusTransaction.requiringNew().run(() -> {
                 BulkItem i = BulkItem.findById(id);
@@ -251,6 +256,8 @@ public class BulkService {
                 i.model = result.model();
                 i.attempts = result.attempts();
                 i.error = null;
+                i.warnings = result.warnings().isEmpty() ? null
+                        : PinWriter.truncate(String.join("\n", result.warnings()), 2000);
                 i.finishedAt = Instant.now();
             });
         } catch (RuntimeException | JsonProcessingException e) {
@@ -307,12 +314,13 @@ public class BulkService {
         BulkViews.Counts counts = new BulkViews.Counts(pending + running + done + failed + cancelled,
                 pending, running, done, failed, cancelled);
         return new BulkViews.Job(job.id, pending + running > 0 ? "RUNNING" : "FINISHED", job.source, job.audience,
-                job.tone, job.variations, job.createdAt, counts, items);
+                job.tone, job.variations, job.brandId, job.createdAt, counts, items);
     }
 
     private BulkViews.Item itemView(BulkItem i) {
         return new BulkViews.Item(i.id, i.seq, i.url, i.topic, i.status, i.pageRead, i.pageSummary, i.model,
-                i.attempts, i.error, pins(i), i.finishedAt);
+                i.attempts, i.error, pins(i), i.warnings == null ? List.of() : List.of(i.warnings.split("\n")),
+                i.finishedAt);
     }
 
     private List<PinIdea> pins(BulkItem item) {

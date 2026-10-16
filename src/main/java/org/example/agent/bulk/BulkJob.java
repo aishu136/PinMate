@@ -20,6 +20,8 @@ public class BulkJob extends PanacheEntity {
     @Column(length = 50)
     public String tone;
     public int variations;
+    /** Brand to write in; looked up when each page runs, so edits to the brand apply to pending pages. */
+    public Long brandId;
 
     @Column(nullable = false)
     public Instant createdAt;

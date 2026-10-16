@@ -92,9 +92,12 @@ curl -X POST http://localhost:8080/api/pins/generate \
       "suggestedBoards": ["Vegan Recipes", "Quick Weeknight Meals"],
       "imageIdea": "Overhead shot of three bowls with bold text overlay"
     }
-  ]
+  ],
+  "warnings": []
 }
 ```
+
+`warnings` lists brand rules the pins still break after the last attempt (see [Brand voices](#brand-voices)).
 
 ### `POST /api/pins/generate-from-image`
 
@@ -206,6 +209,38 @@ curl -X POST http://localhost:8080/api/schedule \
       }'
 ```
 
+## Brand voices
+
+Save a brand once and generate with it everywhere: pick it under **Brand** in the Create or Bulk form
+(**Manage** adds and edits brands), or pass its id as `?brandId=` to `/api/pins/generate`, as a `brandId` form
+field to `/api/pins/generate-from-image`, or as `brandId` in a bulk job.
+
+| Field              | Effect                                                                                     |
+|--------------------|--------------------------------------------------------------------------------------------|
+| `voice`, `guidelines` | Given to Claude with every request                                                      |
+| `audience`         | Used when the request doesn't name one                                                     |
+| `bannedWords`      | Given to Claude; pins that still contain one (whole words, any case, hashtags included) are rewritten, and any left after the last attempt come back in the response's `warnings` |
+| `requiredHashtags` | Up to 5, added first to every pin in code (Pinterest's 8-hashtag limit still applies)       |
+
+| Endpoint                 | Notes                                    |
+|--------------------------|------------------------------------------|
+| `GET /api/brands`        | All brands, by name                      |
+| `POST /api/brands`       | Create; 409 `duplicate_brand` if the name is taken (ignoring case) |
+| `GET /api/brands/{id}`   |                                          |
+| `PUT /api/brands/{id}`   | Replace all fields                       |
+| `DELETE /api/brands/{id}`| Pending bulk pages then run without it   |
+
+```shell
+curl -X POST http://localhost:8080/api/brands -H "Content-Type: application/json" \
+  -d '{"name":"Green Table Kitchen","voice":"Warm, practical, no hype","audience":"busy parents",
+       "bannedWords":["cheap","guilt-free"],"requiredHashtags":["#greentablekitchen"]}'
+
+curl -X POST "http://localhost:8080/api/pins/generate?brandId=1" -H "Content-Type: application/json" \
+  -d '{"topic":"easy weeknight vegan dinners"}'
+```
+
+An unknown `brandId` returns 400 `unknown_brand`.
+
 ## Bulk generation
 
 Write pins for many pages at once. In the web UI open **Bulk** (<http://localhost:8080/#bulk>), paste a sitemap,
@@ -245,7 +280,7 @@ All errors return `{"error": "...", "message": "..."}`.
 
 | Status | Meaning                                                         |
 |--------|-----------------------------------------------------------------|
-| 400    | Invalid request (blank topic, bad URL, variations outside 1–5, missing image) |
+| 400    | Invalid request (blank topic, bad URL, variations outside 1–5, missing image, unknown `brandId`) |
 | 401    | Missing or wrong `X-API-Key` (see [API key](#api-key))          |
 | 403    | Browser request from another website's page (no API key set)     |
 | 413    | Image larger than 5 MB                                          |

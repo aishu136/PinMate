@@ -9,9 +9,11 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.example.agent.brand.BrandService;
 import org.example.agent.model.PinRequest;
 import org.example.agent.model.PinResponse;
 import org.hibernate.validator.constraints.URL;
@@ -25,16 +27,18 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 public class PinContentResource {
 
     private final PinAgent agent;
+    private final BrandService brands;
 
-    public PinContentResource(PinAgent agent) {
+    public PinContentResource(PinAgent agent, BrandService brands) {
         this.agent = agent;
+        this.brands = brands;
     }
 
     @Operation(summary = "Write pins for a topic, optionally grounded in a destination URL")
     @POST
     @Path("/generate")
-    public PinResponse generate(@NotNull @Valid PinRequest request) {
-        return agent.generate(request);
+    public PinResponse generate(@NotNull @Valid PinRequest request, @QueryParam("brandId") Long brandId) {
+        return agent.generate(request, null, brands.resolve(brandId));
     }
 
     /** Same as {@link #generate} but for an uploaded image; the topic is optional and inferred from the image. */
@@ -47,7 +51,9 @@ public class PinContentResource {
                                          @RestForm @URL @Size(max = 2048) String url,
                                          @RestForm @Size(max = 200) String audience,
                                          @RestForm @Size(max = 50) String tone,
-                                         @RestForm @Min(1) @Max(5) Integer variations) {
-        return agent.generate(new PinRequest(topic, url, audience, tone, variations), ImageUploads.read(image));
+                                         @RestForm @Min(1) @Max(5) Integer variations,
+                                         @RestForm Long brandId) {
+        return agent.generate(new PinRequest(topic, url, audience, tone, variations), ImageUploads.read(image),
+                brands.resolve(brandId));
     }
 }

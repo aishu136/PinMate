@@ -17,7 +17,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
                 @Tag(name = "Pins", description = "Generate pin copy"),
                 @Tag(name = "Pinterest", description = "Publish to the connected Pinterest account"),
                 @Tag(name = "Schedule", description = "Publish pins at a later time"),
-                @Tag(name = "Bulk", description = "Write pins for many pages from a sitemap, feed or URL list")
+                @Tag(name = "Bulk", description = "Write pins for many pages from a sitemap, feed or URL list"),
+                @Tag(name = "Brands", description = "Saved brand voices to generate with")
         },
         security = @SecurityRequirement(name = PinMateApi.API_KEY))
 @SecurityScheme(securitySchemeName = PinMateApi.API_KEY, type = SecuritySchemeType.APIKEY,

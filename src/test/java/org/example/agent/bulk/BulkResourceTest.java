@@ -102,7 +102,7 @@ class BulkResourceTest {
 
     @Test
     void writesPinsForEveryPageAndRecordsFailures() {
-        when(agent.generate(any(PinRequest.class))).thenAnswer(inv -> {
+        when(agent.generate(any(PinRequest.class), any(), any())).thenAnswer(inv -> {
             PinRequest r = inv.getArgument(0);
             if (r.url().contains("broken")) {
                 throw new PinGenerationException(502, "Claude returned no pin ideas");
@@ -118,7 +118,7 @@ class BulkResourceTest {
         assertEquals(0, service.processPending());
 
         ArgumentCaptor<PinRequest> requests = ArgumentCaptor.forClass(PinRequest.class);
-        verify(agent, atLeastOnce()).generate(requests.capture());
+        verify(agent, atLeastOnce()).generate(requests.capture(), any(), any());
         assertTrue(requests.getAllValues().stream().allMatch(r -> "cozy".equals(r.tone()) && r.variations() == 1));
 
         given().when().get("/api/bulk/" + id)
@@ -153,7 +153,7 @@ class BulkResourceTest {
         assertTrue(lines.get(1).contains("\"About \"\"easy vegan dinners\"\". Save it!\""), lines.get(1));
 
         // Retry re-queues only the failed page.
-        when(agent.generate(any(PinRequest.class))).thenAnswer(inv -> pinsFor(inv.getArgument(0)));
+        when(agent.generate(any(PinRequest.class), any(), any())).thenAnswer(inv -> pinsFor(inv.getArgument(0)));
         given().when().post("/api/bulk/" + id + "/retry").then().statusCode(200).body("counts.pending", is(1));
         assertEquals(1, service.processPending());
         given().when().get("/api/bulk/" + id).then().body("counts.done", is(3)).body("items[1].error", nullValue());
@@ -170,7 +170,7 @@ class BulkResourceTest {
                 .body("status", is("FINISHED"))
                 .body("counts.cancelled", is(2));
         assertEquals(0, service.processPending());
-        verify(agent, never()).generate(argThat(r -> r.url().startsWith("https://blog.example.com/")));
+        verify(agent, never()).generate(argThat(r -> r.url().startsWith("https://blog.example.com/")), any(), any());
     }
 
     @Test

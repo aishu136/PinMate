@@ -198,6 +198,17 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   [hidden] { display: none !important; }
 
+  .brand-pick { display: flex; gap: 8px; }
+  .brand-pick select { flex: 1; min-width: 0; }
+  dialog.wide { width: min(560px, calc(100vw - 32px)); }
+  dialog.wide form { max-height: calc(100vh - 48px); overflow-y: auto; }
+  .brand-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .brand-row:last-child { border-bottom: 0; }
+  .brand-row > div { flex: 1; min-width: 0; }
+  .brand-row .stitle { font-weight: 700; overflow-wrap: anywhere; }
+  .brand-row .meta { overflow-wrap: anywhere; }
+  .warn-box { border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; color: var(--warn); border: 1px solid currentColor; font-size: 14px; }
+  .warn-box ul { margin: 4px 0 0; padding-left: 18px; }
   .pages-head { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 6px; font-size: 13px; }
   .count.over { color: var(--danger); font-weight: 700; }
   .link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; font-size: 13px; }
@@ -317,6 +328,11 @@
           <input type="text" id="bulk-tone" maxlength="50" placeholder="playful" list="tones">
         </div>
       </div>
+      <label for="bulk-brand">Brand <span class="opt">(optional)</span></label>
+      <div class="brand-pick">
+        <select id="bulk-brand" class="brand-select"><option value="">No brand</option></select>
+        <button type="button" class="btn small manage-brands">Manage</button>
+      </div>
       <label id="bulk-variations-label">Pins per page</label>
       <div class="seg" role="group" aria-labelledby="bulk-variations-label" id="bulk-variations">
         <button type="button" aria-pressed="false">1</button>
@@ -378,6 +394,11 @@
         </div>
       </div>
 
+      <label for="brand">Brand <span class="opt">(optional)</span></label>
+      <div class="brand-pick">
+        <select id="brand" class="brand-select"><option value="">No brand</option></select>
+        <button type="button" class="btn small manage-brands">Manage</button>
+      </div>
       <label id="variations-label">Variations</label>
       <div class="seg" role="group" aria-labelledby="variations-label" id="variations">
         <button type="button" aria-pressed="false">1</button>
@@ -399,6 +420,34 @@
     </div>
   </section>
 </main>
+
+<dialog id="brands" class="wide">
+  <form method="dialog" id="brands-form" novalidate>
+    <h3 id="brands-title">Brands</h3>
+    <p class="hint">A brand's voice, guidelines and banned words are given to Claude; required hashtags are added to every pin, and pins that still use a banned word are retried.</p>
+    <div class="alert" id="brand-error" hidden></div>
+    <div id="brand-list"></div>
+    <div id="brand-editor" hidden>
+      <label for="brand-name">Name</label>
+      <input type="text" id="brand-name" maxlength="100" placeholder="Green Table Kitchen">
+      <label for="brand-audience">Audience <span class="opt">(used when a request has none)</span></label>
+      <input type="text" id="brand-audience" maxlength="200" placeholder="busy parents who cook at home">
+      <label for="brand-voice">Voice</label>
+      <textarea id="brand-voice" rows="2" maxlength="500" placeholder="Warm, practical and encouraging. No hype."></textarea>
+      <label for="brand-guidelines">Guidelines</label>
+      <textarea id="brand-guidelines" rows="3" maxlength="2000" placeholder="Mention prep time when known. Say &quot;plant-based&quot; rather than &quot;vegan&quot;."></textarea>
+      <label for="brand-banned">Never use <span class="opt">(one per line or comma-separated)</span></label>
+      <textarea id="brand-banned" rows="2" placeholder="cheap, guilt-free, superfood"></textarea>
+      <label for="brand-tags">Required hashtags <span class="opt">(up to 5)</span></label>
+      <input type="text" id="brand-tags" placeholder="#greentablekitchen">
+    </div>
+    <div class="dialog-actions">
+      <button class="btn primary" value="save" id="brand-save" hidden>Save brand</button>
+      <button class="btn" value="new" id="brand-new" formnovalidate>New brand</button>
+      <button class="btn" value="cancel" formnovalidate>Close</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="settings">
   <form method="dialog" id="settings-form">
@@ -526,6 +575,154 @@
   // ---------- API key settings ----------
   function refreshKeyDot() { $('#key-dot').classList.toggle('on', !!store.get(KEY_STORAGE)); }
   refreshKeyDot();
+
+  // ---------- brands ----------
+  const BRAND_STORAGE = 'pinmate.brandId';
+  let brands = [];
+  let editingBrand = null; // id being edited, 'new', or null
+
+  function warnBox(title, items) {
+    const box = document.createElement('div');
+    box.className = 'warn-box';
+    box.setAttribute('role', 'status');
+    box.append(document.createTextNode(title));
+    const ul = document.createElement('ul');
+    for (const w of items) {
+      const li = document.createElement('li');
+      li.textContent = w;
+      ul.append(li);
+    }
+    box.append(ul);
+    return box;
+  }
+
+  async function loadBrands() {
+    try {
+      brands = await api('/api/brands');
+    } catch {
+      brands = [];
+    }
+    const saved = store.get(BRAND_STORAGE);
+    for (const select of document.querySelectorAll('.brand-select')) {
+      const current = select.value || saved;
+      select.replaceChildren(new Option('No brand', ''));
+      for (const b of brands) select.append(new Option(b.name, String(b.id)));
+      select.value = brands.some(b => String(b.id) === current) ? current : '';
+    }
+    renderBrandList();
+  }
+  for (const select of document.querySelectorAll('.brand-select')) {
+    select.addEventListener('change', () => {
+      store.set(BRAND_STORAGE, select.value);
+      for (const other of document.querySelectorAll('.brand-select')) other.value = select.value;
+    });
+  }
+
+  function renderBrandList() {
+    const list = $('#brand-list');
+    list.replaceChildren();
+    list.hidden = editingBrand != null;
+    if (!brands.length) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = 'No brands yet.';
+      list.append(p);
+    }
+    for (const b of brands) {
+      const row = document.createElement('div');
+      row.className = 'brand-row';
+      const info = document.createElement('div');
+      const name = document.createElement('div');
+      name.className = 'stitle';
+      name.textContent = b.name;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = [b.voice, b.requiredHashtags.join(' '), b.bannedWords.length ? `${b.bannedWords.length} banned` : '']
+        .filter(Boolean).join(' · ') || 'No rules yet';
+      info.append(name, meta);
+      row.append(info,
+        rowButton('Edit', () => editBrand(b)),
+        rowButton('Delete', async () => {
+          if (!confirm(`Delete the brand "${b.name}"?`)) return;
+          try {
+            await api(`/api/brands/${b.id}`, { method: 'DELETE' });
+            toast('Brand deleted');
+          } catch (err) { toast(describe(err)); }
+          await loadBrands();
+        }));
+      list.append(row);
+    }
+  }
+
+  function editBrand(b) {
+    editingBrand = b ? b.id : 'new';
+    $('#brand-error').hidden = true;
+    $('#brands-title').textContent = b ? `Edit ${b.name}` : 'New brand';
+    $('#brand-name').value = b?.name || '';
+    $('#brand-audience').value = b?.audience || '';
+    $('#brand-voice').value = b?.voice || '';
+    $('#brand-guidelines').value = b?.guidelines || '';
+    $('#brand-banned').value = (b?.bannedWords || []).join('\n');
+    $('#brand-tags').value = (b?.requiredHashtags || []).join(' ');
+    showBrandEditor(true);
+    $('#brand-name').focus();
+  }
+
+  function showBrandEditor(on) {
+    if (!on) editingBrand = null;
+    $('#brand-editor').hidden = !on;
+    $('#brand-list').hidden = on;
+    $('#brand-save').hidden = !on;
+    $('#brand-new').textContent = on ? 'Back' : 'New brand';
+    if (!on) $('#brands-title').textContent = 'Brands';
+  }
+
+  for (const b of document.querySelectorAll('.manage-brands')) {
+    b.addEventListener('click', async () => {
+      showBrandEditor(false);
+      $('#brand-error').hidden = true;
+      $('#brands').showModal();
+      await loadBrands();
+    });
+  }
+
+  $('#brands-form').addEventListener('submit', async e => {
+    const action = e.submitter?.value;
+    if (action === 'cancel') return;
+    e.preventDefault();
+    if (action === 'new') return editingBrand != null ? showBrandEditor(false) : editBrand(null);
+    if (editingBrand == null) return; // Enter pressed while the list is showing
+    const body = {
+      name: $('#brand-name').value.trim(),
+      audience: $('#brand-audience').value.trim() || null,
+      voice: $('#brand-voice').value.trim() || null,
+      guidelines: $('#brand-guidelines').value.trim() || null,
+      bannedWords: $('#brand-banned').value.split(/[\n,]+/).map(w => w.trim()).filter(Boolean),
+      requiredHashtags: $('#brand-tags').value.split(/[\s,]+/).filter(Boolean)
+    };
+    if (!body.name) {
+      $('#brand-error').textContent = 'Give the brand a name.';
+      $('#brand-error').hidden = false;
+      return;
+    }
+    try {
+      const saved = editingBrand === 'new'
+        ? await api('/api/brands', { json: body })
+        : await api(`/api/brands/${editingBrand}`, { json: body, method: 'PUT' });
+      toast(`Saved ${saved.name}`);
+      showBrandEditor(false);
+      await loadBrands();
+      if (!$('#brand').value) {
+        for (const select of document.querySelectorAll('.brand-select')) select.value = String(saved.id);
+        store.set(BRAND_STORAGE, String(saved.id));
+      }
+    } catch (err) {
+      $('#brand-error').textContent = describe(err);
+      $('#brand-error').hidden = false;
+    }
+  });
+
+  loadBrands();
   $('#settings-btn').addEventListener('click', () => {
     $('#api-key').value = store.get(KEY_STORAGE);
     $('#settings').returnValue = '';
@@ -602,9 +799,11 @@
         if (audience) form.append('audience', audience);
         if (tone) form.append('tone', tone);
         form.append('variations', String(state.variations));
+        if ($('#brand').value) form.append('brandId', $('#brand').value);
         data = await api('/api/pins/generate-from-image', { form });
       } else {
-        data = await api('/api/pins/generate', { json: { topic, url: url || null, audience: audience || null, tone: tone || null, variations: state.variations } });
+        const brandQuery = $('#brand').value ? `?brandId=${encodeURIComponent($('#brand').value)}` : '';
+        data = await api('/api/pins/generate' + brandQuery, { json: { topic, url: url || null, audience: audience || null, tone: tone || null, variations: state.variations } });
       }
       state.link = url;
       renderResults(data);
@@ -649,6 +848,7 @@
     meta.textContent = `${state.pins.length} pin${state.pins.length === 1 ? '' : 's'} · ${data.model}` + (data.attempts > 1 ? ` · ${data.attempts} passes` : '');
     head.append(h, meta);
     results.append(head);
+    if (data.warnings?.length) results.append(warnBox('Still breaks brand rules after retrying — edit before posting:', data.warnings));
 
     if (data.source) {
       const d = document.createElement('details');
@@ -1209,7 +1409,7 @@
     btn.disabled = true;
     try {
       const job = await api('/api/bulk', { json: {
-        source: bulk.source, items, variations: bulk.variations,
+        source: bulk.source, items, variations: bulk.variations, brandId: $('#bulk-brand').value ? Number($('#bulk-brand').value) : null,
         audience: $('#bulk-audience').value.trim() || null, tone: $('#bulk-tone').value.trim() || null
       } });
       bulk.pages = [];
@@ -1351,6 +1551,7 @@
     top.append(info, badges);
     row.append(top);
     if (item.error) row.append(el('div', 'err', item.error));
+    if (item.warnings?.length) row.append(warnBox('Brand rules:', item.warnings));
 
     if (item.pins.length) {
       const d = el('details');

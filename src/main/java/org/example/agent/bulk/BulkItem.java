@@ -53,5 +53,8 @@ public class BulkItem extends PanacheEntity {
     public int attempts;
     @Column(length = 1000)
     public String error;
+    /** Brand warnings, one per line. */
+    @Column(length = 2000)
+    public String warnings;
     public Instant finishedAt;
 }

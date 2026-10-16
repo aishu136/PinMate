@@ -26,15 +26,16 @@ public final class BulkViews {
      * @param items  null in job lists
      */
     public record Job(long id, String status, String source, String audience, String tone, int variations,
-                      Instant createdAt, Counts counts, List<Item> items) {
+                      Long brandId, Instant createdAt, Counts counts, List<Item> items) {
     }
 
     /**
      * @param pageRead null until processed
      * @param pins     empty until done
+     * @param warnings brand rules the pins still break
      */
     public record Item(long id, int seq, String url, String topic, BulkItem.Status status, Boolean pageRead,
                        String pageSummary, String model, int attempts, String error, List<PinIdea> pins,
-                       Instant finishedAt) {
+                       List<String> warnings, Instant finishedAt) {
     }
 }

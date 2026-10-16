@@ -6,6 +6,7 @@ import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.state.AgentState;
+import org.example.agent.model.Brand;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinImage;
 import org.example.agent.model.PinRequest;
@@ -15,6 +16,7 @@ import org.example.agent.model.SourcePage;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +47,7 @@ public class PinAgent {
     static class PinState extends AgentState {
         static final String REQUEST = "request";
         static final String IMAGE = "image";
+        static final String BRAND = "brand";
         static final String SOURCE = "source";
         static final String PINS = "pins";
         static final String MODEL = "model";
@@ -61,6 +64,10 @@ public class PinAgent {
 
         PinImage image() {
             return this.<PinImage>value(IMAGE).orElse(null);
+        }
+
+        Brand brand() {
+            return this.<Brand>value(BRAND).orElse(null);
         }
 
         SourcePage source() {
@@ -102,10 +109,24 @@ public class PinAgent {
 
     /** @param image uploaded pin image, or null */
     public PinResponse generate(PinRequest request, PinImage image) {
+        return generate(request, image, null);
+    }
+
+    /**
+     * @param image uploaded pin image, or null
+     * @param brand brand voice to apply, or null; its audience is used when the request has none
+     */
+    public PinResponse generate(PinRequest request, PinImage image, Brand brand) {
+        if (brand != null && !PinWriter.hasText(request.audience()) && PinWriter.hasText(brand.audience())) {
+            request = new PinRequest(request.topic(), request.url(), brand.audience(), request.tone(), request.variations());
+        }
         Map<String, Object> input = new HashMap<>();
         input.put(PinState.REQUEST, request);
         if (image != null) {
             input.put(PinState.IMAGE, image);
+        }
+        if (brand != null) {
+            input.put(PinState.BRAND, brand);
         }
         PinState state;
         try {
@@ -113,7 +134,8 @@ public class PinAgent {
         } catch (RuntimeException e) {
             throw unwrap(e);
         }
-        return new PinResponse(request.topic(), state.model(), state.source(), state.attempts(), state.pins());
+        return new PinResponse(request.topic(), state.model(), state.source(), state.attempts(), state.pins(),
+                brandWarnings(state.pins(), brand));
     }
 
     private CompiledGraph<PinState> buildGraph() {
@@ -141,15 +163,17 @@ public class PinAgent {
     }
 
     private Map<String, Object> generate(PinState state) {
-        PinWriter.Draft draft = pinWriter.write(state.request(), state.source(), state.image(), state.feedback());
+        PinWriter.Draft draft = pinWriter.write(state.request(), state.source(), state.image(), state.feedback(),
+                state.brand());
         return Map.of(
-                PinState.PINS, draft.pins(),
+                PinState.PINS, withRequiredHashtags(draft.pins(), state.brand()),
                 PinState.MODEL, draft.model(),
                 PinState.ATTEMPTS, state.attempts() + 1);
     }
 
     private Map<String, Object> validate(PinState state) {
-        return Map.of(PinState.FEEDBACK, findIssues(state.pins(), state.request().variationsOrDefault()));
+        return Map.of(PinState.FEEDBACK,
+                findIssues(state.pins(), state.request().variationsOrDefault(), state.brand()));
     }
 
     // --- edges ---
@@ -162,8 +186,12 @@ public class PinAgent {
         return !state.feedback().isEmpty() && state.attempts() < config.maxAttempts() ? GENERATE : END;
     }
 
-    /** Problems worth one more generate pass; empty when the pins are fine. */
     static String findIssues(List<PinIdea> pins, int requested) {
+        return findIssues(pins, requested, null);
+    }
+
+    /** Problems worth one more generate pass; empty when the pins are fine. */
+    static String findIssues(List<PinIdea> pins, int requested, Brand brand) {
         List<String> issues = new ArrayList<>();
         if (pins.size() < requested) {
             issues.add("Only " + pins.size() + " of the " + requested + " requested pins were returned.");
@@ -179,7 +207,62 @@ public class PinAgent {
                 break;
             }
         }
+        List<String> banned = bannedWordsIn(pins, brand);
+        if (!banned.isEmpty()) {
+            issues.add("Never use these words or phrases: " + String.join(", ", banned) + ".");
+        }
         return String.join(" ", issues);
+    }
+
+    /** The brand's required hashtags come first on every pin; Pinterest's limit of 8 still applies. */
+    static List<PinIdea> withRequiredHashtags(List<PinIdea> pins, Brand brand) {
+        if (brand == null || brand.requiredHashtags().isEmpty()) {
+            return pins;
+        }
+        return pins.stream().map(p -> {
+            List<String> tags = new ArrayList<>(brand.requiredHashtags());
+            if (p.hashtags() != null) {
+                tags.addAll(p.hashtags());
+            }
+            return new PinIdea(p.title(), p.description(), PinWriter.normalizeHashtags(tags), p.altText(),
+                    p.suggestedBoards(), p.imageIdea());
+        }).toList();
+    }
+
+    private static List<String> bannedWordsIn(List<PinIdea> pins, Brand brand) {
+        if (brand == null || brand.bannedWords().isEmpty()) {
+            return List.of();
+        }
+        Set<String> found = new LinkedHashSet<>();
+        for (PinIdea pin : pins) {
+            found.addAll(brand.bannedWordsIn(pinText(pin)));
+        }
+        return List.copyOf(found);
+    }
+
+    /** Banned words still present after the last attempt, one warning per affected pin. */
+    static List<String> brandWarnings(List<PinIdea> pins, Brand brand) {
+        if (brand == null || brand.bannedWords().isEmpty()) {
+            return List.of();
+        }
+        List<String> warnings = new ArrayList<>();
+        for (int i = 0; i < pins.size(); i++) {
+            List<String> found = brand.bannedWordsIn(pinText(pins.get(i)));
+            if (!found.isEmpty()) {
+                warnings.add("Pin " + (i + 1) + " uses words the " + brand.name() + " brand avoids: "
+                        + String.join(", ", found));
+            }
+        }
+        return warnings;
+    }
+
+    private static String pinText(PinIdea p) {
+        return String.join("\n", nullToEmpty(p.title()), nullToEmpty(p.description()), nullToEmpty(p.altText()),
+                p.hashtags() == null ? "" : String.join(" ", p.hashtags()));
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 
     /** Node failures come back wrapped by the graph runner; surface the original so the error mappers apply. */

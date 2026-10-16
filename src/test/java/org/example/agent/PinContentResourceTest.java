@@ -33,7 +33,7 @@ class PinContentResourceTest {
     void generatesPins() {
         PinIdea pin = new PinIdea("15-Minute Vegan Dinners", "Quick meals. Save for later!",
                 List.of("#vegan"), "Bowl of noodles", List.of("Vegan Recipes"), "Overhead shot");
-        when(agent.generate(any(PinRequest.class)))
+        when(agent.generate(any(PinRequest.class), any(), any()))
                 .thenReturn(new PinResponse("vegan dinners", "claude-opus-5", null, 1, List.of(pin)));
 
         given().contentType(ContentType.JSON)
@@ -52,7 +52,7 @@ class PinContentResourceTest {
                 .body("{\"topic\":\"  \"}")
                 .when().post("/api/pins/generate")
                 .then().statusCode(400);
-        verify(agent, never()).generate(any());
+        verify(agent, never()).generate(any(), any(), any());
     }
 
     @Test
@@ -69,7 +69,7 @@ class PinContentResourceTest {
 
     @Test
     void mapsGenerationFailure() {
-        when(agent.generate(any(PinRequest.class))).thenThrow(new PinGenerationException(422, "declined"));
+        when(agent.generate(any(PinRequest.class), any(), any())).thenThrow(new PinGenerationException(422, "declined"));
 
         given().contentType(ContentType.JSON)
                 .body("{\"topic\":\"x\"}")
@@ -81,7 +81,7 @@ class PinContentResourceTest {
 
     @Test
     void generatesFromUploadedImage() {
-        when(agent.generate(any(PinRequest.class), any(PinImage.class)))
+        when(agent.generate(any(PinRequest.class), any(PinImage.class), any()))
                 .thenReturn(new PinResponse(null, "claude-opus-5", null, 1, List.of()));
 
         given().multiPart("image", "pin.png", PNG, "application/octet-stream")
@@ -91,7 +91,7 @@ class PinContentResourceTest {
 
         ArgumentCaptor<PinRequest> request = ArgumentCaptor.forClass(PinRequest.class);
         ArgumentCaptor<PinImage> image = ArgumentCaptor.forClass(PinImage.class);
-        verify(agent).generate(request.capture(), image.capture());
+        verify(agent).generate(request.capture(), image.capture(), any());
         assertNull(request.getValue().topic());
         assertEquals(2, request.getValue().variationsOrDefault());
         // type comes from the bytes, not the client-declared content type
@@ -110,7 +110,7 @@ class PinContentResourceTest {
         given().multiPart("image", "fake.png", "%PDF-1.7 not an image".getBytes(), "image/png")
                 .when().post("/api/pins/generate-from-image")
                 .then().statusCode(415).body("error", is("invalid_image"));
-        verify(agent, never()).generate(any(), any());
+        verify(agent, never()).generate(any(), any(), any());
     }
 
     @Test

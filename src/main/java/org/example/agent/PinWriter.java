@@ -12,6 +12,7 @@ import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.TextBlockParam;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.example.agent.model.Brand;
 import org.example.agent.model.PinIdea;
 import org.example.agent.model.PinIdeas;
 import org.example.agent.model.PinImage;
@@ -48,6 +49,8 @@ public class PinWriter {
             - When a page brief is provided, ground the copy in it; never invent facts, prices, statistics or claims.
             - When an image is attached, it is the pin image: write alt text that describes what it actually shows,
               make imageIdea a text-overlay or styling suggestion for it, and describe only what is visible.
+            - When a brand is given, write in its voice and follow its guidelines, never use the words in
+              <never_use> (not even inside hashtags), and include every required hashtag on each pin.
             """;
 
     /** JSON schema derived from {@link PinIdeas}; computed once via the SDK's typed builder. */
@@ -72,8 +75,9 @@ public class PinWriter {
      * @param source   page brief from {@link PageReader}, or null
      * @param image    uploaded pin image, or null
      * @param feedback problems with the previous attempt that this attempt must fix, or null
+     * @param brand    brand voice to write in, or null
      */
-    public Draft write(PinRequest request, SourcePage source, PinImage image, String feedback) {
+    public Draft write(PinRequest request, SourcePage source, PinImage image, String feedback, Brand brand) {
         StructuredMessageCreateParams.Builder<PinIdeas> builder = MessageCreateParams.builder()
                 .model(config.model())
                 .maxTokens(config.maxTokens())
@@ -84,7 +88,7 @@ public class PinWriter {
                         .effort(OutputConfig.Effort.of(config.effort()))
                         .format(PIN_IDEAS_FORMAT)
                         .build())
-                .addUserMessageOfBlockParams(userContent(request, source, image, feedback));
+                .addUserMessageOfBlockParams(userContent(request, source, image, feedback, brand));
 
         StructuredMessage<PinIdeas> message = client.messages().create(ClaudeRequests.withFallbacks(builder, config).build());
         LOG.debugf("Claude usage for topic '%s': %s", request.topic(), message.usage());
@@ -114,7 +118,13 @@ public class PinWriter {
 
     /** Image first (Claude reads images best before the question), then the text prompt. */
     static List<ContentBlockParam> userContent(PinRequest request, SourcePage source, PinImage image, String feedback) {
-        TextBlockParam text = TextBlockParam.builder().text(buildUserPrompt(request, source, image, feedback)).build();
+        return userContent(request, source, image, feedback, null);
+    }
+
+    static List<ContentBlockParam> userContent(PinRequest request, SourcePage source, PinImage image, String feedback,
+                                               Brand brand) {
+        TextBlockParam text = TextBlockParam.builder()
+                .text(buildUserPrompt(request, source, image, feedback, brand)).build();
         if (image == null) {
             return List.of(ContentBlockParam.ofText(text));
         }
@@ -128,6 +138,10 @@ public class PinWriter {
     }
 
     static String buildUserPrompt(PinRequest request, SourcePage source, PinImage image, String feedback) {
+        return buildUserPrompt(request, source, image, feedback, null);
+    }
+
+    static String buildUserPrompt(PinRequest request, SourcePage source, PinImage image, String feedback, Brand brand) {
         StringBuilder sb = new StringBuilder()
                 .append("Create exactly ").append(request.variationsOrDefault()).append(" Pinterest pin variations")
                 .append(image == null ? ".\n\n" : " for the attached image.\n\n");
@@ -150,6 +164,23 @@ public class PinWriter {
                 sb.append("The page could not be read, so don't describe its contents.\n");
             }
         }
+        if (brand != null) {
+            sb.append("<brand name=\"").append(brand.name().strip().replace('"', '\'')).append("\">\n");
+            if (hasText(brand.voice())) {
+                sb.append("<voice>").append(brand.voice().strip()).append("</voice>\n");
+            }
+            if (hasText(brand.guidelines())) {
+                sb.append("<guidelines>\n").append(brand.guidelines().strip()).append("\n</guidelines>\n");
+            }
+            if (!brand.bannedWords().isEmpty()) {
+                sb.append("<never_use>").append(String.join(", ", brand.bannedWords())).append("</never_use>\n");
+            }
+            if (!brand.requiredHashtags().isEmpty()) {
+                sb.append("<required_hashtags>").append(String.join(" ", brand.requiredHashtags()))
+                        .append("</required_hashtags>\n");
+            }
+            sb.append("</brand>\n");
+        }
         if (hasText(feedback)) {
             sb.append("\nYour previous attempt had problems. Fix them this time:\n<feedback>")
                     .append(feedback).append("</feedback>\n");
@@ -169,7 +200,7 @@ public class PinWriter {
                 pin.imageIdea() == null ? null : pin.imageIdea().strip());
     }
 
-    static List<String> normalizeHashtags(List<String> hashtags) {
+    public static List<String> normalizeHashtags(List<String> hashtags) {
         if (hashtags == null) {
             return List.of();
         }
